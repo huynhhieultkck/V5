@@ -1,0 +1,221 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// --- ENUMS ---
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  SUCCESS
+  FAILURE
+  PROCESSING
+}
+
+enum ProductType {
+  LOCAL
+  RESELL
+}
+
+enum TransactionType {
+  DEPOSIT
+  PURCHASE
+  REFUND
+}
+
+enum Language {
+  VI
+  EN
+  ZH
+  RU
+}
+
+// --- NGƯỜI DÙNG ---
+
+model User {
+  id            String         @id @default(cuid())
+  username      String         @unique
+  email         String         @unique
+  password      String
+  balance       Float          @default(0)
+  role          Role           @default(USER)
+  
+  // API Key để người dùng có thể kết nối với shop qua công cụ/code
+  apiKey        String?        @unique @default(uuid())
+  
+  isBanned      Boolean        @default(false)
+  lastIp        String?        
+  resetToken    String?        @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  orders        Order[]
+  transactions  Transaction[]
+}
+
+// --- DANH MỤC ---
+
+model Category {
+  id           Int                   @id @default(autoincrement())
+  slug         String                @unique
+  icon         String?
+  order        Int                   @default(0)
+  createdAt    DateTime              @default(now())
+  
+  translations CategoryTranslation[]
+  products     Product[]
+}
+
+model CategoryTranslation {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+  language    Language
+  name        String
+  description String?
+  
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, language])
+}
+
+// --- SẢN PHẨM ---
+
+model Product {
+  id              Int                  @id @default(autoincrement())
+  price           Float
+  originalPrice   Float?
+  type            ProductType          @default(LOCAL)
+  status          Boolean              @default(true)
+  
+  // Giới hạn mua hàng
+  minPurchase     Int                  @default(1)
+  maxPurchase     Int?                 
+  
+  // Cấu hình Resell
+  resellDomain    String?
+  resellApiKey    String?
+  resellProductId String?
+  resellStock     Int                  @default(0)
+  lastSyncAt      DateTime?            
+  
+  categoryId      Int
+  category        Category             @relation(fields: [categoryId], references: [id])
+  
+  translations    ProductTranslation[]
+  stocks          Stock[]              
+  orders          Order[]
+  
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model ProductTranslation {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  language    Language
+  name        String
+  description String?  @db.Text
+  
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, language])
+}
+
+// --- MÃ GIẢM GIÁ (COUPON) ---
+
+model Coupon {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique
+  discount      Float     
+  isPercent     Boolean   @default(false) 
+  
+  minOrder      Float     @default(0)     
+  maxDiscount   Float?                    
+  
+  usageLimit    Int       @default(1)     
+  usedCount     Int       @default(0)
+  
+  expiryDate    DateTime?
+  status        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+}
+
+// --- KHO HÀNG (LOCAL) ---
+
+model Stock {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  content     String   @db.Text
+  isSold      Boolean  @default(false)
+  orderId     String?
+  createdAt   DateTime @default(now())
+}
+
+// --- ĐƠN HÀNG ---
+
+model Order {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  productId     Int
+  product       Product     @relation(fields: [productId], references: [id])
+  
+  amount        Int         @default(1)
+  totalPrice    Float       
+  discountAmount Float      @default(0) 
+  couponCode    String?     
+  status        OrderStatus @default(PENDING)
+  ip            String?     
+  
+  apiTransId    String?     
+  apiResponse   String?     @db.Text 
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// --- GIAO DỊCH (Ví tiền) ---
+
+model Transaction {
+  id            Int             @id @default(autoincrement())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  
+  code          String?         @unique 
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  type          TransactionType
+  content       String?
+  createdAt     DateTime        @default(now())
+}
+
+// --- HÀNG ĐỢI XỬ LÝ (Jobs) ---
+
+model Job {
+  id          String    @id @default(cuid())
+  type        String    
+  payload     String    @db.Text
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
