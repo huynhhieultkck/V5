@@ -11,6 +11,7 @@ CREATE TABLE `User` (
     `isBanned` BOOLEAN NOT NULL DEFAULT false,
     `lastIp` VARCHAR(191) NULL,
     `resetToken` VARCHAR(191) NULL,
+    `resetTokenExpiry` DATETIME(3) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 

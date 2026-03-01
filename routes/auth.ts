@@ -130,12 +130,18 @@ authRoutes.post("/forgot-password", zValidator("json", forgotPasswordSchema), as
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return c.json({ message: t(c, "auth_reset_sent") }); // Bảo mật: Trả về success kể cả ko tìm thấy mail
+    if (!user) return c.json({ message: t(c, "auth_reset_sent") }); 
 
     const resetToken = randomBytes(32).toString("hex");
+    // Thiết lập hết hạn sau 1 giờ (3600 giây * 1000 ms)
+    const expiry = new Date(Date.now() + 3600 * 1000);
+
     await prisma.user.update({
       where: { id: user.id },
-      data: { resetToken }
+      data: { 
+        resetToken,
+        resetTokenExpiry: expiry
+      }
     });
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
@@ -166,13 +172,23 @@ authRoutes.post("/reset-password", zValidator("json", resetPasswordSchema), asyn
   if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
   try {
-    const user = await prisma.user.findUnique({ where: { resetToken: token } });
-    if (!user) return c.json({ message: t(c, "auth_token_invalid") }, 400);
+    const user = await prisma.user.findUnique({ 
+      where: { resetToken: token } 
+    });
+
+    // Kiểm tra xem user có tồn tại và token còn hạn hay không
+    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      return c.json({ message: t(c, "auth_token_invalid") }, 400);
+    }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashedPassword, resetToken: null }
+      data: { 
+        password: hashedPassword, 
+        resetToken: null,
+        resetTokenExpiry: null
+      }
     });
 
     return c.json({ status: "success", message: t(c, "auth_password_updated") });

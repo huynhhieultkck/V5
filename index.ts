@@ -14,6 +14,7 @@ import { statsRoutes } from "./routes/stats";
 import { orderRoutes } from "./routes/orders";
 import { transactionRoutes } from "./routes/transactions";
 import { startBankCron } from "./cron/bankCron";
+import { startSyncCron } from "./cron/syncCron"; // Import tiến trình đồng bộ mới
 
 const app = new Hono();
 
@@ -38,7 +39,7 @@ app.get("/", (c) => {
   return c.json({
     status: "success",
     message: "MMO Shop API is fully functional!",
-    modules: ["Auth", "Catalog", "Checkout", "Billing", "Stats", "History"]
+    modules: ["Auth", "Catalog", "Checkout", "Billing", "Stats", "History", "Sync"]
   });
 });
 
@@ -52,3 +53,6 @@ serve({
 
 // Khởi chạy tiến trình quét ngân hàng tự động
 startBankCron();
+
+// Khởi chạy tiến trình đồng bộ kho hàng Resell tự động
+startSyncCron();
