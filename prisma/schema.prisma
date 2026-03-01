@@ -55,6 +55,9 @@ model User {
   balance       Float          @default(0)
   role          Role           @default(USER)
   
+  // Mã ví định danh nạp tiền (Ví dụ: VMMOABC12345)
+  // Dùng để quét trong nội dung chuyển khoản ngân hàng
+  wallet        String         @unique
   // API Key để người dùng có thể kết nối với shop qua công cụ/code
   apiKey        String?        @unique @default(uuid())
   
@@ -66,6 +69,20 @@ model User {
   
   orders        Order[]
   transactions  Transaction[]
+}
+
+// --- NGÂN HÀNG ---
+
+model Bank {
+id            Int      @id @default(autoincrement())
+name          String   // Tên hiển thị (Ví dụ: Vietcombank)
+code          String   // Mã định danh (vietcombank, mbbank, bidv, acb, techcombank)
+accountNumber String
+accountName   String
+password      String?  // Mật khẩu cho API Web2M (nếu có)
+token         String   // Token API Web2M
+enabled       Boolean  @default(true)
+createdAt     DateTime @default(now())
 }
 
 // --- DANH MỤC ---
@@ -113,6 +130,9 @@ model Product {
   resellStock     Int                  @default(0)
   lastSyncAt      DateTime?            
   
+  // Thống kê
+  soldCount       Int                  @default(0)
+
   categoryId      Int
   category        Category             @relation(fields: [categoryId], references: [id])
   
