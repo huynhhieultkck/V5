@@ -7,14 +7,25 @@ import { prisma } from "../lib/prisma";
 import { t } from "../lib/lang";
 import { mailService } from "../lib/mail";
 import { verifyTurnstile } from "../lib/captcha";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { authMiddleware } from "../middlewares/auth";
 
 const authRoutes = new Hono();
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key-mmo-v5";
+const JWT_SECRET = process.env.JWT_SECRET || "1fcb6b5d-5082-4897-a54c-7bbdfcab2e89";
+const prefix = process.env.DEPOSIT_PREFIX || 'VMMO';
+
+interface CustomJWTPayload {
+  id: string;
+  username: string;
+  role: string;
+  version: number;
+  exp: number;
+}
 
 // Hàm tạo mã ví nạp tiền ngẫu nhiên (VMMO + 8 ký tự)
 const generateWalletCode = () => {
-  return `VMMO${randomBytes(4).toString("hex").toUpperCase()}`;
+  const randomPart = randomBytes(4).toString("hex").toUpperCase();
+  return `${prefix}${randomPart}`;
 };
 
 // --- Schemas ---
@@ -42,10 +53,34 @@ const resetPasswordSchema = z.object({
   captchaToken: z.string(),
 });
 
+// --- API Tạo/Cấp mới API Key (Hỗ trợ đa ngôn ngữ) ---
+authRoutes.post("/generate-api-key", authMiddleware, async (c) => {
+  const payload = c.get("jwtPayload") as CustomJWTPayload;
+  const userId = payload.id;
+
+  try {
+    const newApiKey = randomUUID();
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { apiKey: newApiKey },
+      select: { apiKey: true }
+    });
+
+    return c.json({
+      status: "success",
+      message: t(c, "auth_api_key_generated"), // Sử dụng hàm t để lấy ngôn ngữ phù hợp
+      apiKey: updatedUser.apiKey
+    });
+  } catch (error) {
+    return c.json({ message: t(c, "system_error") }, 500);
+  }
+});
+
 // --- Register ---
 authRoutes.post("/register", zValidator("json", registerSchema), async (c) => {
   const { username, email, password, captchaToken } = c.req.valid("json");
-  
+
   const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
   if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
@@ -56,19 +91,19 @@ authRoutes.post("/register", zValidator("json", registerSchema), async (c) => {
     if (existingUser) return c.json({ message: t(c, "auth_exists") }, 400);
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     let wallet = generateWalletCode();
     let isWalletExists = await prisma.user.findUnique({ where: { wallet } });
-    
+
     while (isWalletExists) {
       wallet = generateWalletCode();
       isWalletExists = await prisma.user.findUnique({ where: { wallet } });
     }
 
     const user = await prisma.user.create({
-      data: { 
-        username, 
-        email, 
+      data: {
+        username,
+        email,
         password: hashedPassword,
         wallet
       },
@@ -83,7 +118,7 @@ authRoutes.post("/register", zValidator("json", registerSchema), async (c) => {
 // --- Login ---
 authRoutes.post("/login", zValidator("json", loginSchema), async (c) => {
   const { username, password, captchaToken } = c.req.valid("json");
-  
+
   const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
   if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
@@ -95,27 +130,34 @@ authRoutes.post("/login", zValidator("json", loginSchema), async (c) => {
     if (user.isBanned) return c.json({ message: t(c, "auth_banned") }, 403);
 
     const token = await sign(
-      { id: user.id, username: user.username, role: user.role, exp: Math.floor(Date.now() / 1000) + 86400 }, 
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        version: user.tokenVersion,
+        exp: Math.floor(Date.now() / 1000) + 86400
+      },
       JWT_SECRET,
       "HS256"
     );
-    
-    await prisma.user.update({ 
-      where: { id: user.id }, 
-      data: { lastIp: c.req.header("x-forwarded-for") || "unknown" } 
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastIp: c.req.header("x-forwarded-for") || "unknown" }
     });
 
-    return c.json({ 
-      status: "success", 
-      message: t(c, "auth_login_success"), 
-      token, 
-      user: { 
-        id: user.id, 
-        username: user.username, 
-        role: user.role, 
+    return c.json({
+      status: "success",
+      message: t(c, "auth_login_success"),
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
         balance: user.balance,
-        wallet: user.wallet 
-      } 
+        wallet: user.wallet,
+        apiKey: user.apiKey
+      }
     });
   } catch (e) {
     return c.json({ message: t(c, "system_error") }, 500);
@@ -130,32 +172,35 @@ authRoutes.post("/forgot-password", zValidator("json", forgotPasswordSchema), as
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return c.json({ message: t(c, "auth_reset_sent") }); 
+    if (!user) return c.json({ message: t(c, "auth_reset_sent") });
 
     const resetToken = randomBytes(32).toString("hex");
-    // Thiết lập hết hạn sau 1 giờ (3600 giây * 1000 ms)
     const expiry = new Date(Date.now() + 3600 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { 
+      data: {
         resetToken,
         resetTokenExpiry: expiry
       }
     });
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
+
     await mailService.sendMail({
       to: user.email,
       subject: t(c, "mail_reset_subject"),
       html: `
-        <p>${t(c, "mail_reset_hello")} ${user.username},</p>
-        <p>${t(c, "mail_reset_text1")}</p>
-        <a href="${resetUrl}" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">
-          ${t(c, "mail_reset_button")}
-        </a>
-        <p>${t(c, "mail_reset_footer")}</p>
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+          <h2>${t(c, "mail_reset_hello")} ${user.username},</h2>
+          <p>${t(c, "mail_reset_text1")}</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" style="padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              ${t(c, "mail_reset_button")}
+            </a>
+          </div>
+          <p style="color: #666; font-size: 14px;">${t(c, "mail_reset_footer")}</p>
+        </div>
       `
     });
 
@@ -172,22 +217,23 @@ authRoutes.post("/reset-password", zValidator("json", resetPasswordSchema), asyn
   if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
   try {
-    const user = await prisma.user.findUnique({ 
-      where: { resetToken: token } 
+    const user = await prisma.user.findUnique({
+      where: { resetToken: token }
     });
 
-    // Kiểm tra xem user có tồn tại và token còn hạn hay không
     if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
       return c.json({ message: t(c, "auth_token_invalid") }, 400);
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
     await prisma.user.update({
       where: { id: user.id },
-      data: { 
-        password: hashedPassword, 
+      data: {
+        password: hashedPassword,
         resetToken: null,
-        resetTokenExpiry: null
+        resetTokenExpiry: null,
+        tokenVersion: { increment: 1 }
       }
     });
 

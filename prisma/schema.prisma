@@ -55,11 +55,13 @@ model User {
   balance       Float          @default(0)
   role          Role           @default(USER)
   
+
+   tokenVersion  Int            @default(0)
   // Mã ví định danh nạp tiền (Ví dụ: VMMOABC12345)
   // Dùng để quét trong nội dung chuyển khoản ngân hàng
   wallet        String         @unique
   // API Key để người dùng có thể kết nối với shop qua công cụ/code
-  apiKey        String?        @unique @default(uuid())
+  apiKey        String?       
   
   isBanned      Boolean        @default(false)
   lastIp        String?        

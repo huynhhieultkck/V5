@@ -8,7 +8,7 @@ import { authMiddleware, adminMiddleware } from "../middlewares/auth";
 import { verifyTurnstile } from "../lib/captcha";
 
 const productRoutes = new Hono();
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key-mmo-v5";
+const JWT_SECRET = process.env.JWT_SECRET || "1fcb6b5d-5082-4897-a54c-7bbdfcab2e89";
 
 // --- Schemas ---
 const translationSchema = z.object({

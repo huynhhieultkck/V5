@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 
 // Secret Key bạn cung cấp
-const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAACh8NevCJQ4kMrjbAuGUXDfTlxI";
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAA";
 
 /**
  * Xác thực token Turnstile từ Cloudflare

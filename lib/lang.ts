@@ -18,6 +18,7 @@ interface ITranslations {
   auth_reset_sent: string;
   auth_token_invalid: string;
   auth_password_updated: string;
+  auth_api_key_generated: string; // Thêm key mới
   // Users
   user_not_found: string;
   user_update_success: string;
@@ -88,6 +89,7 @@ const messages: Record<Language, ITranslations> = {
     auth_reset_sent: "Vui lòng kiểm tra email của bạn.",
     auth_token_invalid: "Mã xác thực không hợp lệ.",
     auth_password_updated: "Mật khẩu đã được cập nhật.",
+    auth_api_key_generated: "API Key đã được tạo thành công.",
     user_not_found: "Không tìm thấy thành viên.",
     user_update_success: "Cập nhật thông tin thành viên thành công.",
     user_deleted_success: "Đã xóa thành viên khỏi hệ thống.",
@@ -138,6 +140,7 @@ const messages: Record<Language, ITranslations> = {
     auth_reset_sent: "Please check your email.",
     auth_token_invalid: "Invalid reset token.",
     auth_password_updated: "Password updated successfully.",
+    auth_api_key_generated: "API Key has been generated successfully.",
     user_not_found: "User not found.",
     user_update_success: "User updated successfully.",
     user_deleted_success: "User deleted successfully.",
@@ -188,6 +191,7 @@ const messages: Record<Language, ITranslations> = {
     auth_reset_sent: "Проверьте почту.",
     auth_token_invalid: "Неверный токен.",
     auth_password_updated: "Пароль обновлен.",
+    auth_api_key_generated: "API-ключ успешно создан.",
     user_not_found: "Пользователь не найден.",
     user_update_success: "Обновлено успешно.",
     user_deleted_success: "Пользователь удален.",
@@ -238,6 +242,7 @@ const messages: Record<Language, ITranslations> = {
     auth_reset_sent: "请检查您的邮箱。",
     auth_token_invalid: "验证令牌无效。",
     auth_password_updated: "密码更新成功。",
+    auth_api_key_generated: "API 密钥已成功生成。",
     user_not_found: "找不到用户。",
     user_update_success: "更新成功。",
     user_deleted_success: "删除成功。",

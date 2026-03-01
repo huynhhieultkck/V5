@@ -23,25 +23,25 @@ const buySchema = z.object({
 });
 
 /**
- * API Buy - Đẩy vào Job Queue với kiểm tra đa ngôn ngữ
+ * API Buy - Đã sửa lỗi Race Condition cho Coupon
  */
 checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async (c) => {
   const { productId, amount, couponCode } = c.req.valid("json");
   
-  // Ép kiểu để truy cập payload.id
   const payload = c.get("jwtPayload") as CustomJWTPayload;
   const userId = payload.id;
 
   try {
-    const [user, product, coupon] = await Promise.all([
+    // Lấy thông tin cơ bản ngoài Transaction để giảm tải cho DB
+    const [user, product] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
       prisma.product.findUnique({ where: { id: productId, status: true } }),
-      couponCode ? prisma.coupon.findUnique({ where: { code: couponCode, status: true } }) : Promise.resolve(null)
     ]);
 
     if (!user) return c.json({ message: t(c, "auth_not_found") }, 404);
     if (!product) return c.json({ message: t(c, "product_not_found") }, 404);
 
+    // Kiểm tra kho (bước lọc nhanh ban đầu)
     if (product.resellStock < amount) {
       return c.json({ message: t(c, "checkout_out_of_stock") }, 400);
     }
@@ -53,45 +53,71 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
       return c.json({ message: t(c, "checkout_max_purchase") + product.maxPurchase }, 400);
     }
 
-    const subTotal = product.price * amount;
-    let discountAmount = 0;
-
-    if (couponCode) {
-      if (!coupon) return c.json({ message: t(c, "coupon_invalid") }, 400);
-      if (coupon.expiryDate && new Date() > coupon.expiryDate) return c.json({ message: t(c, "coupon_invalid") }, 400);
-      if (coupon.usedCount >= coupon.usageLimit) return c.json({ message: t(c, "coupon_usage_limit") }, 400);
-      if (subTotal < coupon.minOrder) return c.json({ message: t(c, "coupon_min_order") }, 400);
-
-      if (coupon.isPercent) {
-        discountAmount = (subTotal * coupon.discount) / 100;
-        if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) discountAmount = coupon.maxDiscount;
-      } else {
-        discountAmount = coupon.discount;
-      }
-    }
-
-    const finalPrice = Math.max(0, subTotal - discountAmount);
-
-    if (user.balance < finalPrice) {
-      return c.json({ message: t(c, "checkout_insufficient_balance") }, 400);
-    }
-
     const orderId = await prisma.$transaction(async (tx) => {
+      // 1. Kiểm tra lại User và Số dư trong Transaction (Chống race condition tiền tệ)
       const freshUser = await tx.user.findUnique({ where: { id: userId } });
-      if (!freshUser || freshUser.balance < finalPrice) throw new Error("INSUFFICIENT_BALANCE");
+      if (!freshUser) throw new Error("USER_NOT_FOUND");
 
+      let discountAmount = 0;
+      const subTotal = product.price * amount;
+
+      // 2. XỬ LÝ MÃ GIẢM GIÁ (CHỐNG RACE CONDITION)
+      if (couponCode) {
+        /**
+         * QUAN TRỌNG: Phải tìm Coupon bên trong Transaction.
+         * Trong MariaDB/MySQL, Prisma sẽ tự động xử lý tính nhất quán.
+         * Để an toàn tuyệt đối, chúng ta kiểm tra giới hạn ngay tại đây.
+         */
+        const freshCoupon = await tx.coupon.findUnique({
+          where: { code: couponCode, status: true }
+        });
+
+        if (!freshCoupon) throw new Error("COUPON_INVALID");
+        
+        // Kiểm tra hạn dùng
+        if (freshCoupon.expiryDate && new Date() > freshCoupon.expiryDate) {
+          throw new Error("COUPON_INVALID");
+        }
+
+        // KIỂM TRA GIỚI HẠN SỬ DỤNG (RACE CONDITION FIX)
+        if (freshCoupon.usedCount >= freshCoupon.usageLimit) {
+          throw new Error("COUPON_USAGE_LIMIT");
+        }
+
+        // Kiểm tra đơn hàng tối thiểu
+        if (subTotal < freshCoupon.minOrder) {
+          throw new Error("COUPON_MIN_ORDER");
+        }
+
+        // Tính toán giảm giá
+        if (freshCoupon.isPercent) {
+          discountAmount = (subTotal * freshCoupon.discount) / 100;
+          if (freshCoupon.maxDiscount && discountAmount > freshCoupon.maxDiscount) {
+            discountAmount = freshCoupon.maxDiscount;
+          }
+        } else {
+          discountAmount = freshCoupon.discount;
+        }
+
+        // Cập nhật lượt dùng Coupon ngay trong transaction
+        await tx.coupon.update({
+          where: { id: freshCoupon.id },
+          data: { usedCount: { increment: 1 } }
+        });
+      }
+
+      const finalPrice = Math.max(0, subTotal - discountAmount);
+
+      // Kiểm tra lại số dư cuối cùng
+      if (freshUser.balance < finalPrice) throw new Error("INSUFFICIENT_BALANCE");
+
+      // 3. Thực hiện trừ tiền User
       await tx.user.update({
         where: { id: userId },
         data: { balance: { decrement: finalPrice } }
       });
 
-      if (coupon) {
-        await tx.coupon.update({
-          where: { id: coupon.id },
-          data: { usedCount: { increment: 1 } }
-        });
-      }
-
+      // 4. Tạo đơn hàng
       const order = await tx.order.create({
         data: {
           userId,
@@ -105,6 +131,7 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
         }
       });
 
+      // 5. Ghi log giao dịch
       await tx.transaction.create({
         data: {
           userId,
@@ -116,6 +143,7 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
         }
       });
 
+      // 6. Đẩy vào Job Queue
       await tx.job.create({
         data: {
           type: "ORDER_FULFILLMENT",
@@ -131,7 +159,13 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
     return c.json({ status: "success", message: t(c, "checkout_success"), orderId });
 
   } catch (error: any) {
+    // Xử lý các lỗi ném ra từ Transaction
     if (error.message === "INSUFFICIENT_BALANCE") return c.json({ message: t(c, "checkout_insufficient_balance") }, 400);
+    if (error.message === "COUPON_INVALID") return c.json({ message: t(c, "coupon_invalid") }, 400);
+    if (error.message === "COUPON_USAGE_LIMIT") return c.json({ message: t(c, "coupon_usage_limit") }, 400);
+    if (error.message === "COUPON_MIN_ORDER") return c.json({ message: t(c, "coupon_min_order") }, 400);
+    
+    console.error("[Checkout Error]:", error);
     return c.json({ message: t(c, "system_error") }, 500);
   }
 });

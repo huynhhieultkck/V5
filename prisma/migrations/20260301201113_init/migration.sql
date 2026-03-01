@@ -6,6 +6,7 @@ CREATE TABLE `User` (
     `password` VARCHAR(191) NOT NULL,
     `balance` DOUBLE NOT NULL DEFAULT 0,
     `role` ENUM('USER', 'ADMIN') NOT NULL DEFAULT 'USER',
+    `tokenVersion` INTEGER NOT NULL DEFAULT 0,
     `wallet` VARCHAR(191) NOT NULL,
     `apiKey` VARCHAR(191) NULL,
     `isBanned` BOOLEAN NOT NULL DEFAULT false,
