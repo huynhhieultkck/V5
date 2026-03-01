@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { t } from "../lib/lang";
 import { authMiddleware } from "../middlewares/auth";
 import { sign, verify } from "hono/jwt";
+import { logger } from "../lib/logger";
 
 const cryptoRoutes = new Hono();
 
@@ -83,7 +84,7 @@ cryptoRoutes.post("/create", authMiddleware, zValidator("json", createInvoiceSch
     const result = await response.json();
 
     if (result.status === "error" || !result.message) {
-      console.error("[Payid19] Create Fail:", result);
+      logger.error("[Payid19] Create Fail:", result);
       return c.json({ message: t(c, "deposit_create_fail") }, 500);
     }
 
@@ -92,7 +93,6 @@ cryptoRoutes.post("/create", authMiddleware, zValidator("json", createInvoiceSch
       invoice_url: result.message,
     });
   } catch (error) {
-    console.error(error);
     return c.json({ message: t(c, "system_error") }, 500);
   }
 });
@@ -154,12 +154,12 @@ cryptoRoutes.post("/callback", async (c) => {
         });
       });
 
-      console.log(`[Deposit] Success for User ${userId}: +${creditAmount} VND (Code: ${uniqueCode})`);
+      logger.log(`[Deposit] Success for User ${userId}: +${creditAmount} VND (Code: ${uniqueCode})`);
     }
 
     return c.json({ success: true });
   } catch (error: any) {
-    console.error("[Deposit Callback Error]:", error.message);
+    logger.error("[Deposit Callback Error]:", error.message);
     return c.json({ success: false, message: error.message }, 400);
   }
 });

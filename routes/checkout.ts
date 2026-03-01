@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { t } from "../lib/lang";
 import { authMiddleware } from "../middlewares/auth";
 import { mailService } from "../lib/mail";
+import { logger } from "../lib/logger";
 
 const checkoutRoutes = new Hono();
 
@@ -165,7 +166,7 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
     if (error.message === "COUPON_USAGE_LIMIT") return c.json({ message: t(c, "coupon_usage_limit") }, 400);
     if (error.message === "COUPON_MIN_ORDER") return c.json({ message: t(c, "coupon_min_order") }, 400);
     
-    console.error("[Checkout Error]:", error);
+    logger.error("[Checkout Error]:", error);
     return c.json({ message: t(c, "system_error") }, 500);
   }
 });

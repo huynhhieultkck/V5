@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-
+import { logger } from "./logger";
 // Secret Key bạn cung cấp
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAA";
 
@@ -28,7 +28,7 @@ export async function verifyTurnstile(token: string, ip?: string): Promise<boole
     const outcome = await result.json();
     return !!outcome.success;
   } catch (err) {
-    console.error("Turnstile error:", err);
+    logger.error("Turnstile error:", err);
     return false;
   }
 }

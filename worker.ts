@@ -2,12 +2,13 @@ import { prisma } from "./lib/prisma";
 import { CMSNTService } from "./lib/cmsnt";
 import { mailService } from "./lib/mail";
 import { OrderStatus } from "./generated/prisma/client";
+import { logger } from "./lib/logger";
 
 /**
  * Worker xử lý hàng đợi đơn hàng - Đã sửa lỗi Job Duplication
  */
 async function startWorker() {
-  console.log("--- Order Worker is running with Strict Locking... ---");
+  logger.log("--- Order Worker is running with Strict Locking... ---");
 
   while (true) {
     try {
@@ -45,7 +46,7 @@ async function startWorker() {
         continue;
       }
 
-      console.log(`[Worker] Đang xử lý Job ID: ${job.id}`);
+      logger.log(`[Worker] Đang xử lý Job ID: ${job.id}`);
       
       const payload = JSON.parse(job.payload);
       const { orderId, productId, amount, userId, finalPrice } = payload;
@@ -132,10 +133,10 @@ async function startWorker() {
           data: { status: "COMPLETED" } 
         });
         
-        console.log(`[Worker] Đơn hàng #${orderId} XỬ LÝ THÀNH CÔNG.`);
+        logger.log(`[Worker] Đơn hàng #${orderId} XỬ LÝ THÀNH CÔNG.`);
 
       } catch (err: any) {
-        console.error(`[Worker] Lỗi thực thi Job ${job.id}:`, err.message);
+        logger.error(`[Worker] Lỗi thực thi Job ${job.id}:`, err.message);
 
         const nextAttempt = job.attempts + 1;
         // Nếu lỗi do hết hàng thật hoặc đã quá số lần thử tối đa -> Hoàn tiền cho khách
@@ -155,7 +156,7 @@ async function startWorker() {
       }
 
     } catch (globalErr) {
-      console.error("[Worker] Lỗi vòng lặp chính:", globalErr);
+      logger.error("[Worker] Lỗi vòng lặp chính:", globalErr);
       await new Promise(r => setTimeout(r, 5000));
     }
   }
@@ -165,7 +166,7 @@ async function startWorker() {
  * Hàm xử lý khi đơn hàng lỗi không thể khắc phục -> Hoàn tiền tự động
  */
 async function handleFailure(userId: string, orderId: string, amount: number, jobId: string, errorMsg: string) {
-  console.log(`[Worker] Đang hoàn tiền cho đơn hàng #${orderId} do lỗi: ${errorMsg}`);
+  logger.log(`[Worker] Đang hoàn tiền cho đơn hàng #${orderId} do lỗi: ${errorMsg}`);
   
   try {
     await prisma.$transaction(async (tx) => {
@@ -203,7 +204,7 @@ async function handleFailure(userId: string, orderId: string, amount: number, jo
       });
     });
   } catch (e) {
-    console.error("[Worker] Lỗi nghiêm trọng khi thực hiện hoàn tiền:", e);
+    logger.error("[Worker] Lỗi nghiêm trọng khi thực hiện hoàn tiền:", e);
   }
 }
 

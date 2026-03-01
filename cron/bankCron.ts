@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { logger } from "../lib/logger";
 
 const BANK_URLS: Record<string, string> = {
   vietcombank: 'https://api.web2m.com/historyapivcbv3',
@@ -15,7 +16,7 @@ const bankInterval = Number(process.env.CRON_BANK_INTERVAL) || 20000;
  * Đã sửa lỗi: Xung đột mã giao dịch giữa các ngân hàng (Collision Bank TXID)
  */
 export async function startBankCron() {
-  console.log('--- Bank Cron Job started with Unique Prefixing... ---');
+  logger.log('--- Bank Cron Job started with Unique Prefixing... ---');
 
   while (true) {
     try {
@@ -82,14 +83,14 @@ export async function startBankCron() {
               });
             });
 
-            console.log(`[BankCron] Đã cộng ${amount} cho User ${user.username} (Unique TX: ${uniqueCode})`);
+            logger.log(`[BankCron] Đã cộng ${amount} cho User ${user.username} (Unique TX: ${uniqueCode})`);
           }
         } catch (bankErr: any) {
-          console.error(`[BankCron] Lỗi quét ngân hàng ${bank.code}:`, bankErr.message);
+          logger.error(`[BankCron] Lỗi quét ngân hàng ${bank.code}:`, bankErr.message);
         }
       }
     } catch (err) {
-      console.error('[BankCron] Lỗi vòng lặp chính:', err);
+      logger.error('[BankCron] Lỗi vòng lặp chính:', err);
     }
 
     // Chờ 20 giây trước khi quét lượt tiếp theo

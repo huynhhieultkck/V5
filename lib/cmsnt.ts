@@ -1,3 +1,5 @@
+import { logger } from "./logger";
+
 /**
  * Service để tương tác với các shop sử dụng source CMSNT (như mail72h, shopvia1s)
  * Dựa trên cấu trúc thực tế từ Postman: 
@@ -30,7 +32,7 @@ export class CMSNTService {
       }
       return 0;
     } catch (error) {
-      console.error(`[CMSNT] Lỗi check stock tại ${this.domain}:`, error);
+      logger.error(`[CMSNT] Lỗi check stock tại ${this.domain}:`, error);
       return 0;
     }
   }
@@ -69,7 +71,7 @@ export class CMSNTService {
        */
       return data;
     } catch (error) {
-      console.error(`[CMSNT] Lỗi kết nối mua hàng tại ${this.domain}:`, error);
+      logger.error(`[CMSNT] Lỗi kết nối mua hàng tại ${this.domain}:`, error);
       return { 
         status: 'error', 
         msg: 'Không thể kết nối tới máy chủ nguồn (CMSNT)' 
