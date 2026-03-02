@@ -7,7 +7,6 @@ import { authMiddleware, adminMiddleware } from "../middlewares/auth";
 
 const userRoutes = new Hono();
 
-// Interface Payload JWT để TypeScript hiểu cấu trúc thông tin người dùng
 interface CustomJWTPayload {
   id: string;
   username: string;
@@ -15,7 +14,6 @@ interface CustomJWTPayload {
   exp: number;
 }
 
-// Schema kiểm tra dữ liệu cập nhật thành viên
 const updateUserSchema = z.object({
   balance: z.number().optional(),
   role: z.enum(["USER", "ADMIN"]).optional(),
@@ -23,20 +21,15 @@ const updateUserSchema = z.object({
   wallet: z.string().optional(),
 });
 
-/**
- * Admin: Lấy danh sách thành viên
- * Hỗ trợ: Phân trang, Tìm kiếm (Username/Email/ID/Wallet), Lọc theo quyền và trạng thái khóa
- */
 userRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 20);
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 20), 1), 100);
   const search = c.req.query("search");
   const role = c.req.query("role") as "USER" | "ADMIN" | undefined;
   const isBannedStr = c.req.query("isBanned");
   const sort = c.req.query("sort") || "newest";
 
   try {
-    // Xây dựng điều kiện lọc động để tránh lỗi exactOptionalPropertyTypes
     const where: any = {};
     if (search) {
       where.OR = [
@@ -50,7 +43,6 @@ userRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
     if (isBannedStr === "true") where.isBanned = true;
     if (isBannedStr === "false") where.isBanned = false;
 
-    // Xác định thứ tự sắp xếp
     let orderBy: any = { createdAt: "desc" };
     switch (sort) {
       case "balance_desc": orderBy = { balance: "desc" }; break;
@@ -59,7 +51,6 @@ userRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
       case "newest": default: orderBy = { createdAt: "desc" }; break;
     }
 
-    // Truy vấn dữ liệu và tổng số lượng đồng thời
     const [total, users] = await Promise.all([
       prisma.user.count({ where }),
       prisma.user.findMany({
@@ -97,9 +88,6 @@ userRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
-/**
- * Admin: Lấy chi tiết một thành viên theo ID
- */
 userRoutes.get("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = c.req.param("id");
   try {
@@ -112,7 +100,6 @@ userRoutes.get("/:id", authMiddleware, adminMiddleware, async (c) => {
 
     if (!user) return c.json({ message: t(c, "user_not_found") }, 404);
 
-    // Loại bỏ mật khẩu trước khi trả về dữ liệu
     const { password, ...safeUser } = user;
     return c.json({ status: "success", data: safeUser });
   } catch (error) {
@@ -120,10 +107,6 @@ userRoutes.get("/:id", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
-/**
- * Admin: Cập nhật thông tin thành viên
- * Bao gồm: Điều chỉnh số dư (có ghi log transaction), thay đổi quyền hạn và trạng thái khóa
- */
 userRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updateUserSchema), async (c) => {
   const id = c.req.param("id");
   const validatedData = c.req.valid("json");
@@ -132,7 +115,6 @@ userRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updat
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return c.json({ message: t(c, "user_not_found") }, 404);
 
-    // Nếu có sự thay đổi về số dư, tiến hành tạo log giao dịch để đối soát
     if (validatedData.balance !== undefined && validatedData.balance !== user.balance) {
       const diff = validatedData.balance - user.balance;
       await prisma.transaction.create({
@@ -142,12 +124,11 @@ userRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updat
           balanceBefore: user.balance,
           balanceAfter: validatedData.balance,
           type: diff > 0 ? "DEPOSIT" : "PURCHASE",
-          content: `Admin manual adjustment: ${diff > 0 ? 'Added' : 'Subtracted'} funds`
+          content: `${diff > 0 ? t(c, "user_adjustment_added") : t(c, "user_adjustment_subtracted")}: ${Math.abs(diff)}`
         }
       });
     }
 
-    // Xây dựng đối tượng updateData sạch để tránh lỗi Prisma exactOptionalPropertyTypes
     const updateData: any = {};
     if (validatedData.balance !== undefined) updateData.balance = validatedData.balance;
     if (validatedData.role !== undefined) updateData.role = validatedData.role;
@@ -175,13 +156,9 @@ userRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updat
   }
 });
 
-/**
- * Admin: Xóa thành viên khỏi hệ thống
- */
 userRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = c.req.param("id");
   try {
-    // Kiểm tra xem thành viên có tồn tại không trước khi xóa
     const exists = await prisma.user.findUnique({ where: { id } });
     if (!exists) return c.json({ message: t(c, "user_not_found") }, 404);
 

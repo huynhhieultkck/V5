@@ -5,12 +5,14 @@ import { verify } from "hono/jwt";
 import { prisma } from "../lib/prisma";
 import { getLanguage, t } from "../lib/lang";
 import { authMiddleware, adminMiddleware } from "../middlewares/auth";
-import { verifyTurnstile } from "../lib/captcha";
 
 const productRoutes = new Hono();
-const JWT_SECRET = process.env.JWT_SECRET || "1fcb6b5d-5082-4897-a54c-7bbdfcab2e89";
 
-// --- Schemas ---
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("CRITICAL: JWT_SECRET environment variable is missing.");
+}
+
 const translationSchema = z.object({
   language: z.enum(["VI", "EN", "ZH", "RU"]),
   name: z.string().min(1),
@@ -33,18 +35,14 @@ const createProductSchema = z.object({
 
 const updateProductSchema = createProductSchema.partial();
 
-// --- [SIÊU API] Public View: Phân trang, Tìm kiếm, Lọc Danh mục, Sắp xếp ---
-// Tự động trả về thêm 'type' nếu người gọi là ADMIN
 productRoutes.get("/view", async (c) => {
   const lang = getLanguage(c);
-  
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 20);
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 20), 1), 100);
   const search = c.req.query("search");
   const categoryId = c.req.query("categoryId") ? Number(c.req.query("categoryId")) : undefined;
   const sort = c.req.query("sort") || "newest";
 
-  // Kiểm tra quyền Admin một cách tùy chọn (không bắt buộc)
   let isAdmin = false;
   const authHeader = c.req.header("Authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -52,9 +50,7 @@ productRoutes.get("/view", async (c) => {
       const token = authHeader.split(" ")[1];
       const payload = await verify(token!, JWT_SECRET, "HS256") as any;
       if (payload?.role === "ADMIN") isAdmin = true;
-    } catch (e) {
-      // Token lỗi hoặc hết hạn thì coi như khách vãng lai
-    }
+    } catch (e) {}
   }
 
   try {
@@ -105,7 +101,6 @@ productRoutes.get("/view", async (c) => {
       maxPurchase: p.maxPurchase,
       stock: p.resellStock,
       soldCount: p.soldCount,
-      // Chỉ trả về type nếu là Admin
       ...(isAdmin && { type: p.type })
     }));
 
@@ -124,7 +119,6 @@ productRoutes.get("/view", async (c) => {
   }
 });
 
-// --- Public: Chi tiết sản phẩm ---
 productRoutes.get("/detail/:id", async (c) => {
   const lang = getLanguage(c);
   const id = parseInt(c.req.param("id"));
@@ -160,7 +154,6 @@ productRoutes.get("/detail/:id", async (c) => {
   }
 });
 
-// --- Admin: CRUD ---
 productRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", createProductSchema), async (c) => {
   const data = c.req.valid("json");
   try {
@@ -227,7 +220,7 @@ productRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = parseInt(c.req.param("id"));
   try {
     await prisma.product.delete({ where: { id } }); 
-    return c.json({ status: "success", message: "Product deleted" });
+    return c.json({ status: "success", message: t(c, "product_deleted") });
   } catch (e) {
     return c.json({ message: t(c, "system_error") }, 500);
   }

@@ -12,18 +12,14 @@ const importStockSchema = z.object({
   content: z.string().min(1),
 });
 
-/**
- * Admin: Danh sách tài khoản trong kho (Có lọc & Phân trang)
- */
 stockRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 50);
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 50), 1), 500);
   const productId = c.req.query("productId") ? Number(c.req.query("productId")) : undefined;
   const isSoldStr = c.req.query("isSold");
   const search = c.req.query("search");
 
   try {
-    // Xây dựng whereClause động để tránh lỗi exactOptionalPropertyTypes
     const where: any = {};
     if (productId) where.productId = productId;
     if (isSoldStr === "true") where.isSold = true;
@@ -60,9 +56,6 @@ stockRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
-/**
- * Admin: Thêm hàng vào kho
- */
 stockRoutes.post("/import", authMiddleware, adminMiddleware, zValidator("json", importStockSchema), async (c) => {
   const { productId, content } = c.req.valid("json");
 
@@ -88,15 +81,12 @@ stockRoutes.post("/import", authMiddleware, adminMiddleware, zValidator("json", 
   }
 });
 
-/**
- * Admin: Xóa 1 tài khoản theo ID
- */
 stockRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = parseInt(c.req.param("id"));
 
   try {
     const item = await prisma.stock.findUnique({ where: { id } });
-    if (!item) return c.json({ message: "Item not found" }, 404);
+    if (!item) return c.json({ message: t(c, "stock_not_found") }, 404);
 
     await prisma.$transaction(async (tx) => {
       await tx.stock.delete({ where: { id } });
@@ -112,16 +102,12 @@ stockRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
-/**
- * Admin: Xóa tất cả tài khoản theo productId
- */
 stockRoutes.delete("/product/:productId", authMiddleware, adminMiddleware, async (c) => {
   const productId = parseInt(c.req.param("productId"));
   const onlyUnsold = c.req.query("onlyUnsold") !== "false";
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Sửa lỗi exactOptionalPropertyTypes bằng cách xây dựng object where sạch
       const deleteWhere: any = { productId };
       if (onlyUnsold) {
         deleteWhere.isSold = false;
@@ -141,9 +127,6 @@ stockRoutes.delete("/product/:productId", authMiddleware, adminMiddleware, async
   }
 });
 
-/**
- * Admin: Tải tất cả tài khoản của sản phẩm (.txt)
- */
 stockRoutes.get("/export/:productId", authMiddleware, adminMiddleware, async (c) => {
   const productId = parseInt(c.req.param("productId"));
   const isSoldStr = c.req.query("isSold");

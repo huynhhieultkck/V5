@@ -1,19 +1,21 @@
 import type { Context } from "hono";
 import { logger } from "./logger";
-// Secret Key bạn cung cấp
-const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAA";
+
+// FAIL-FAST: Ràng buộc TURNSTILE_SECRET_KEY
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY;
+if (!TURNSTILE_SECRET_KEY) {
+  throw new Error("CRITICAL: TURNSTILE_SECRET_KEY environment variable is missing.");
+}
 
 /**
  * Xác thực token Turnstile từ Cloudflare
- * @param token Mã token nhận được từ frontend
- * @param ip Địa chỉ IP của người dùng (tùy chọn)
  */
 export async function verifyTurnstile(token: string, ip?: string): Promise<boolean> {
   if (!token) return false;
 
   try {
     const formData = new FormData();
-    formData.append("secret", TURNSTILE_SECRET_KEY);
+    formData.append("secret", TURNSTILE_SECRET_KEY!);
     formData.append("response", token);
     if (ip) {
       formData.append("remoteip", ip);

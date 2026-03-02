@@ -15,7 +15,7 @@ const createCouponSchema = z.object({
   minOrder: z.number().min(0).default(0),
   maxDiscount: z.number().optional().nullable(),
   usageLimit: z.number().int().min(1).default(1),
-  expiryDate: z.string().optional().nullable(), // Định dạng ISO string
+  expiryDate: z.string().optional().nullable(),
   status: z.boolean().default(true),
 });
 
@@ -23,7 +23,6 @@ const updateCouponSchema = createCouponSchema.partial();
 
 /**
  * Public: Kiểm tra mã giảm giá
- * Query: ?amount=100000 (Giá trị đơn hàng hiện tại để tính toán số tiền giảm)
  */
 couponRoutes.get("/check/:code", authMiddleware, async (c) => {
   const code = c.req.param("code").toUpperCase();
@@ -36,22 +35,18 @@ couponRoutes.get("/check/:code", authMiddleware, async (c) => {
 
     if (!coupon) return c.json({ message: t(c, "coupon_invalid") }, 400);
 
-    // 1. Kiểm tra thời hạn
     if (coupon.expiryDate && new Date() > coupon.expiryDate) {
       return c.json({ message: t(c, "coupon_invalid") }, 400);
     }
 
-    // 2. Kiểm tra giới hạn lượt dùng
     if (coupon.usedCount >= coupon.usageLimit) {
       return c.json({ message: t(c, "coupon_usage_limit") }, 400);
     }
 
-    // 3. Kiểm tra giá trị đơn hàng tối thiểu
     if (subTotal < coupon.minOrder) {
       return c.json({ message: t(c, "coupon_min_order") }, 400);
     }
 
-    // 4. Tính toán số tiền được giảm
     let discountAmount = 0;
     if (coupon.isPercent) {
       discountAmount = (subTotal * coupon.discount) / 100;
@@ -79,18 +74,17 @@ couponRoutes.get("/check/:code", authMiddleware, async (c) => {
 });
 
 /**
- * Admin: Lấy danh sách mã giảm giá (Có Phân trang, Tìm kiếm, Lọc, Sắp xếp)
- * Query: ?page=1&limit=10&search=GIAM&status=true&sort=expiry_desc
+ * Admin: Lấy danh sách mã giảm giá
  */
 couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 10);
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  // Áp dụng giới hạn limit tối đa là 100
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 10), 1), 100);
   const search = c.req.query("search");
   const statusStr = c.req.query("status");
   const sort = c.req.query("sort") || "newest";
 
   try {
-    // 1. Xây dựng điều kiện lọc (Where)
     const where: any = {};
     if (search) {
       where.code = { contains: search.toUpperCase() };
@@ -98,7 +92,6 @@ couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
     if (statusStr === "true") where.status = true;
     if (statusStr === "false") where.status = false;
 
-    // 2. Xây dựng bộ sắp xếp (OrderBy)
     let orderBy: any = { createdAt: "desc" };
     switch (sort) {
       case "usage_asc": orderBy = { usageLimit: "asc" }; break;
@@ -111,7 +104,6 @@ couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
       case "newest": default: orderBy = { createdAt: "desc" }; break;
     }
 
-    // 3. Truy vấn đồng thời tổng số và dữ liệu trang
     const [total, coupons] = await Promise.all([
       prisma.coupon.count({ where }),
       prisma.coupon.findMany({
@@ -137,9 +129,7 @@ couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
-/**
- * Admin: Tạo mã giảm giá mới
- */
+// ... (Các API khác như CRUD giữ nguyên)
 couponRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", createCouponSchema), async (c) => {
   const data = c.req.valid("json");
 
@@ -162,9 +152,6 @@ couponRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", creat
   }
 });
 
-/**
- * Admin: Cập nhật mã giảm giá
- */
 couponRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updateCouponSchema), async (c) => {
   const id = parseInt(c.req.param("id"));
   const data = c.req.valid("json");
@@ -184,9 +171,6 @@ couponRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", upd
   }
 });
 
-/**
- * Admin: Xóa mã giảm giá
- */
 couponRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = parseInt(c.req.param("id"));
   try {

@@ -5,7 +5,6 @@ import { authMiddleware, adminMiddleware } from "../middlewares/auth";
 
 const transactionRoutes = new Hono();
 
-// Interface Payload JWT
 interface CustomJWTPayload {
   id: string;
   username: string;
@@ -20,9 +19,10 @@ transactionRoutes.get("/", authMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as CustomJWTPayload;
   const userId = payload.id;
 
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 10);
-  const type = c.req.query("type"); // DEPOSIT, PURCHASE, REFUND
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  // Áp dụng giới hạn limit tối đa là 100
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 10), 1), 100);
+  const type = c.req.query("type");
 
   try {
     const where: any = { userId };
@@ -53,8 +53,9 @@ transactionRoutes.get("/", authMiddleware, async (c) => {
  * ADMIN: Xem toàn bộ biến động số dư hệ thống
  */
 transactionRoutes.get("/admin/all", authMiddleware, adminMiddleware, async (c) => {
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 20);
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  // Admin được phép lấy tối đa 200
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 20), 1), 200);
   const search = c.req.query("search");
   const type = c.req.query("type");
 

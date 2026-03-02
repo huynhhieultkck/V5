@@ -26,13 +26,13 @@ const updateCategorySchema = createCategorySchema.partial();
 // --- Public: Lấy danh sách danh mục ---
 categoryRoutes.get("/", async (c) => {
   const lang = getLanguage(c);
-  const page = Number(c.req.query("page") || 1);
-  const limit = Number(c.req.query("limit") || 10);
+  const page = Math.max(Number(c.req.query("page") || 1), 1);
+  // Áp dụng giới hạn limit tối đa là 100 để tránh DB Scan lớn
+  const limit = Math.min(Math.max(Number(c.req.query("limit") || 10), 1), 100);
   const search = c.req.query("search");
   const getAll = c.req.query("all") === "true";
 
   try {
-    // Xây dựng whereClause an toàn để tránh lỗi exactOptionalPropertyTypes
     const whereClause: any = {};
     if (search) {
       whereClause.translations = {
@@ -101,7 +101,7 @@ categoryRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", cre
           create: translations.map(trans => ({
             language: trans.language,
             name: trans.name,
-            description: trans.description ?? null // Chuyển undefined thành null
+            description: trans.description ?? null
           }))
         }
       }
