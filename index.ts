@@ -14,16 +14,43 @@ import { statsRoutes } from "./routes/stats";
 import { orderRoutes } from "./routes/orders";
 import { transactionRoutes } from "./routes/transactions";
 import { startBankCron } from "./cron/bankCron";
-import { startSyncCron } from "./cron/syncCron"; // Import tiến trình đồng bộ mới
+import { startSyncCron } from "./cron/syncCron";
 
 const app = new Hono();
 
 // --- Middlewares ---
 app.use("*", logger());
-app.use("*", cors());
+
+/**
+ * CẤU HÌNH CORS BẢO MẬT
+ * Lấy danh sách các domain cho phép từ biến môi trường ALLOWED_ORIGINS.
+ * Ví dụ: ALLOWED_ORIGINS=https://shop.cua-ban.com,http://localhost:5173
+ */
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(",") 
+  : ["http://localhost:3000", "http://localhost:5173"]; // Mặc định cho môi trường phát triển
+
+app.use(
+  "*",
+  cors({
+    origin: (origin) => {
+      // Nếu origin nằm trong whitelist hoặc không có origin (như gọi từ Server-to-Server/Postman)
+      if (allowedOrigins.includes(origin) || !origin) {
+        return origin;
+      }
+      return null; // Từ chối các origin lạ
+    },
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "x-api-key"],
+    exposeHeaders: ["Content-Length", "X-Kuma-Revision"],
+    maxAge: 600,
+    credentials: true,
+  })
+);
+
 app.use("*", prettyJSON());
 
-// --- Routes Registration ---
+// --- Đăng ký Routes ---
 app.route("/api/auth", authRoutes);
 app.route("/api/products", productRoutes);
 app.route("/api/categories", categoryRoutes);
@@ -51,8 +78,6 @@ serve({
   port,
 });
 
-// Khởi chạy tiến trình quét ngân hàng tự động
+// Khởi chạy các tiến trình chạy ngầm
 startBankCron();
-
-// Khởi chạy tiến trình đồng bộ kho hàng Resell tự động
 startSyncCron();

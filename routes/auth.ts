@@ -13,7 +13,6 @@ import { rateLimit } from "../middlewares/rateLimit";
 
 const authRoutes = new Hono();
 
-// FAIL-FAST: Bỏ hoàn toàn fallback chuỗi mặc định
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("CRITICAL: JWT_SECRET environment variable is missing.");
@@ -59,7 +58,43 @@ const resetPasswordSchema = z.object({
   captchaToken: z.string(),
 });
 
-// --- API Tạo/Cấp mới API Key ---
+/**
+ * GET /me - Lấy thông tin profile người dùng hiện tại
+ */
+authRoutes.get("/me", authMiddleware, async (c) => {
+  const payload = c.get("jwtPayload") as CustomJWTPayload;
+  
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        balance: true,
+        wallet: true,
+        apiKey: true,
+        createdAt: true
+      }
+    });
+
+    if (!user) {
+      return c.json({ message: t(c, "auth_not_found") }, 404);
+    }
+
+    return c.json({
+      status: "success",
+      data: user
+    });
+  } catch (error) {
+    return c.json({ message: t(c, "system_error") }, 500);
+  }
+});
+
+/**
+ * API Tạo/Cấp mới API Key
+ */
 authRoutes.post("/generate-api-key", authMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as CustomJWTPayload;
   const userId = payload.id;
@@ -164,8 +199,8 @@ authRoutes.post(
           username: user.username,
           role: user.role,
           balance: user.balance,
-          wallet: user.wallet,
-          apiKey: user.apiKey
+          wallet: user.wallet
+          // apiKey đã được loại bỏ tại đây để bảo mật
         }
       });
     } catch (e) {
