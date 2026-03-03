@@ -117,6 +117,7 @@ model CategoryTranslation {
 
 model Product {
   id              Int                  @id @default(autoincrement())
+  image    String?
   price           Float
   originalPrice   Float?
   type            ProductType          @default(LOCAL)

@@ -21,6 +21,7 @@ const translationSchema = z.object({
 
 const createProductSchema = z.object({
   categoryId: z.number(),
+  image: z.string().url().optional().nullable(), // Hỗ trợ URL hình ảnh
   price: z.number().min(0),
   originalPrice: z.number().optional().nullable(),
   type: z.enum(["LOCAL", "RESELL"]),
@@ -89,6 +90,7 @@ productRoutes.get("/view", async (c) => {
 
     const result = products.map((p: any) => ({
       id: p.id,
+      image: p.image, // Trả về ảnh ở danh sách
       price: p.price,
       originalPrice: p.originalPrice,
       name: p.translations[0]?.name || "N/A",
@@ -138,6 +140,7 @@ productRoutes.get("/detail/:id", async (c) => {
       status: "success",
       data: {
         id: product.id,
+        image: product.image, // Trả về ảnh ở chi tiết
         price: product.price,
         originalPrice: product.originalPrice,
         name: product.translations[0]?.name || "N/A",
@@ -159,6 +162,7 @@ productRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", crea
   try {
     const product = await prisma.product.create({
       data: {
+        image: data.image ?? null,
         price: data.price,
         originalPrice: data.originalPrice ?? null,
         type: data.type,
@@ -189,6 +193,7 @@ productRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", up
   const data = c.req.valid("json");
   try {
     const updateData: any = {};
+    if (data.image !== undefined) updateData.image = data.image ?? null;
     if (data.price !== undefined) updateData.price = data.price;
     if (data.originalPrice !== undefined) updateData.originalPrice = data.originalPrice ?? null;
     if (data.status !== undefined) updateData.status = data.status;

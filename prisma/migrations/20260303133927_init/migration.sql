@@ -66,6 +66,7 @@ CREATE TABLE `CategoryTranslation` (
 -- CreateTable
 CREATE TABLE `Product` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `image` VARCHAR(191) NULL,
     `price` DOUBLE NOT NULL,
     `originalPrice` DOUBLE NULL,
     `type` ENUM('LOCAL', 'RESELL') NOT NULL DEFAULT 'LOCAL',
