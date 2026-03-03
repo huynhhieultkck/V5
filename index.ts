@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { cors } from "hono/cors";
 import { prettyJSON } from "hono/pretty-json";
+
+// Import các Routes
 import { authRoutes } from "./routes/auth";
 import { productRoutes } from "./routes/products";
 import { categoryRoutes } from "./routes/categories";
@@ -13,6 +15,10 @@ import { cryptoRoutes } from "./routes/crypto";
 import { statsRoutes } from "./routes/stats";
 import { orderRoutes } from "./routes/orders";
 import { transactionRoutes } from "./routes/transactions";
+import { couponRoutes } from "./routes/coupons"; // Thêm route coupons
+import { stockRoutes } from "./routes/stocks";   // Thêm route stocks
+
+// Import các Cron Jobs
 import { startBankCron } from "./cron/bankCron";
 import { startSyncCron } from "./cron/syncCron";
 
@@ -25,22 +31,19 @@ if (process.env.ENABLE_LOGS === 'true') {
 
 /**
  * CẤU HÌNH CORS BẢO MẬT
- * Lấy danh sách các domain cho phép từ biến môi trường ALLOWED_ORIGINS.
- * Ví dụ: ALLOWED_ORIGINS=https://shop.cua-ban.com,http://localhost:5173
  */
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",")
-  : ["http://localhost:3000", "http://localhost:5173"]; // Mặc định cho môi trường phát triển
+  : ["http://localhost:3000", "http://localhost:5173"];
 
 app.use(
   "*",
   cors({
     origin: (origin) => {
-      // Nếu origin nằm trong whitelist hoặc không có origin (như gọi từ Server-to-Server/Postman)
       if (allowedOrigins.includes(origin) || !origin) {
         return origin;
       }
-      return null; // Từ chối các origin lạ
+      return null;
     },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "x-api-key"],
@@ -63,12 +66,14 @@ app.route("/api/crypto", cryptoRoutes);
 app.route("/api/stats", statsRoutes);
 app.route("/api/orders", orderRoutes);
 app.route("/api/transactions", transactionRoutes);
+app.route("/api/coupons", couponRoutes); // Mount Coupon Route
+app.route("/api/stocks", stockRoutes);   // Mount Stock Route
 
 app.get("/", (c) => {
   return c.json({
     status: "success",
     message: "MMO Shop API is fully functional!",
-    modules: ["Auth", "Catalog", "Checkout", "Billing", "Stats", "History", "Sync"]
+    modules: ["Auth", "Catalog", "Checkout", "Billing", "Stats", "History", "Sync", "Coupons", "Inventory"]
   });
 });
 
