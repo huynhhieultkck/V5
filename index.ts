@@ -19,15 +19,17 @@ import { startSyncCron } from "./cron/syncCron";
 const app = new Hono();
 
 // --- Middlewares ---
-app.use("*", logger());
+if (process.env.ENABLE_LOGS === 'true') {
+  app.use("*", logger());
+}
 
 /**
  * CẤU HÌNH CORS BẢO MẬT
  * Lấy danh sách các domain cho phép từ biến môi trường ALLOWED_ORIGINS.
  * Ví dụ: ALLOWED_ORIGINS=https://shop.cua-ban.com,http://localhost:5173
  */
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(",") 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
   : ["http://localhost:3000", "http://localhost:5173"]; // Mặc định cho môi trường phát triển
 
 app.use(

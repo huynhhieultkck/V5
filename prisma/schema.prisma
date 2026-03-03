@@ -61,7 +61,7 @@ model User {
   // Dùng để quét trong nội dung chuyển khoản ngân hàng
   wallet        String         @unique
   // API Key để người dùng có thể kết nối với shop qua công cụ/code
-  apiKey        String?       
+  apiKey        String?       @unique
   
   isBanned      Boolean        @default(false)
   lastIp        String?        
