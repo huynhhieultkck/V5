@@ -12,6 +12,10 @@ const importStockSchema = z.object({
   content: z.string().min(1),
 });
 
+const updateSingleStockSchema = z.object({
+  content: z.string().min(1),
+});
+
 stockRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
   const page = Math.max(Number(c.req.query("page") || 1), 1);
   const limit = Math.min(Math.max(Number(c.req.query("limit") || 50), 1), 500);
@@ -76,6 +80,32 @@ stockRoutes.post("/import", authMiddleware, adminMiddleware, zValidator("json", 
     });
 
     return c.json({ status: "success", message: t(c, "stock_import_success"), count: lines.length });
+  } catch (error) {
+    return c.json({ message: t(c, "system_error") }, 500);
+  }
+});
+
+/**
+ * ADMIN: Chỉnh sửa nội dung của 1 tài khoản trong kho
+ */
+stockRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updateSingleStockSchema), async (c) => {
+  const id = parseInt(c.req.param("id"));
+  const { content } = c.req.valid("json");
+
+  try {
+    const stock = await prisma.stock.findUnique({ where: { id } });
+    if (!stock) return c.json({ message: t(c, "stock_not_found") }, 404);
+
+    const updatedStock = await prisma.stock.update({
+      where: { id },
+      data: { content }
+    });
+
+    return c.json({ 
+      status: "success", 
+      message: "Cập nhật tài khoản thành công", 
+      data: updatedStock 
+    });
   } catch (error) {
     return c.json({ message: t(c, "system_error") }, 500);
   }

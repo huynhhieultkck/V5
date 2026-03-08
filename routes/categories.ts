@@ -27,7 +27,6 @@ const updateCategorySchema = createCategorySchema.partial();
 categoryRoutes.get("/", async (c) => {
   const lang = getLanguage(c);
   const page = Math.max(Number(c.req.query("page") || 1), 1);
-  // Áp dụng giới hạn limit tối đa là 100 để tránh DB Scan lớn
   const limit = Math.min(Math.max(Number(c.req.query("limit") || 10), 1), 100);
   const search = c.req.query("search");
   const getAll = c.req.query("all") === "true";
@@ -84,6 +83,46 @@ categoryRoutes.get("/", async (c) => {
     });
   } catch (error) {
     return c.json({ message: t(c, "category_fetch_error") }, 500);
+  }
+});
+
+/**
+ * GET /:id - Xem chi tiết một danh mục
+ * Đã bỏ logic kiểm tra Admin, luôn trả về bản dịch theo ngôn ngữ hiện tại
+ */
+categoryRoutes.get("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  const lang = getLanguage(c);
+
+  try {
+    const category = await prisma.category.findUnique({
+      where: { id },
+      include: {
+        translations: { where: { language: lang } },
+        _count: { select: { products: true } }
+      }
+    });
+
+    if (!category) {
+      return c.json({ message: t(c, "category_not_found") }, 404);
+    }
+
+    const result = {
+      id: category.id,
+      slug: category.slug,
+      icon: category.icon,
+      order: category.order,
+      productCount: category._count?.products || 0,
+      name: category.translations[0]?.name || category.slug,
+      description: category.translations[0]?.description || ""
+    };
+
+    return c.json({
+      status: "success",
+      data: result
+    });
+  } catch (error) {
+    return c.json({ message: t(c, "system_error") }, 500);
   }
 });
 

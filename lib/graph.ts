@@ -1,13 +1,12 @@
 /**
  * Lớp xử lý kết nối với Microsoft Graph API (Mail + OneDrive)
- * Được chuyển đổi từ mẫu ms.js của bạn sang TypeScript
  */
 
 type GraphConfig = {
   tenantId: string;
   clientId: string;
   clientSecret: string;
-  defaultUser: string; // Email quản trị viên (ví dụ: support@vmmo.top)
+  defaultUser: string; 
   defaultFolder?: string;
 };
 
@@ -26,7 +25,7 @@ type SendMailOptions = {
 export class MicrosoftGraphShop {
   private cfg: GraphConfig;
   private token?: { accessToken: string; expiresAtMs: number };
-  private tokenSkewMs = 60_000; // Làm mới token trước 60 giây khi hết hạn
+  private tokenSkewMs = 60_000; 
 
   constructor(cfg: GraphConfig) {
     this.cfg = { ...cfg, defaultFolder: cfg.defaultFolder ?? "" };
@@ -41,7 +40,7 @@ export class MicrosoftGraphShop {
     }
 
     const url = `https://login.microsoftonline.com/${encodeURIComponent(this.cfg.tenantId)}/oauth2/v2.0/token`;
-    const body = new URLSearchParams({
+    const params = new URLSearchParams({
       client_id: this.cfg.clientId,
       client_secret: this.cfg.clientSecret,
       grant_type: "client_credentials",
@@ -51,36 +50,54 @@ export class MicrosoftGraphShop {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
+      body: params,
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(`Lấy token thất bại: ${JSON.stringify(data)}`);
+    const tokenData = await res.json();
+    if (!res.ok) throw new Error(`Lấy token thất bại: ${JSON.stringify(tokenData)}`);
 
     this.token = { 
-      accessToken: data.access_token, 
-      expiresAtMs: now + (data.expires_in * 1000) 
+      accessToken: tokenData.access_token, 
+      expiresAtMs: now + (tokenData.expires_in * 1000) 
     };
-    return data.access_token;
+    return tokenData.access_token;
   }
 
+  /**
+   * Phương thức thực hiện request tới Graph API
+   * Đã sửa để xử lý các phản hồi 202/204 trống một cách an toàn
+   */
   private async graphRequest<T = any>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = await this.getAccessToken();
+    const accessToken = await this.getAccessToken();
     const url = path.startsWith("http") ? path : `https://graph.microsoft.com/v1.0${path}`;
 
     const res = await fetch(url, {
       ...init,
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
         ...(init.headers ?? {}),
       },
     });
 
-    if (res.status === 204) return undefined as any;
-    const data = await res.json();
-    if (!res.ok) throw new Error(`Lỗi Graph API: ${JSON.stringify(data)}`);
+    // 1. Xử lý các mã trạng thái thành công nhưng không có nội dung (thường là sendMail trả về 202)
+    if (res.status === 204 || res.status === 202) {
+      return {} as T;
+    }
+    
+    // 2. Đọc dưới dạng văn bản trước để tránh lỗi "Unexpected end of JSON"
+    const text = await res.text();
+    
+    if (!res.ok) {
+      throw new Error(`Graph API Error [${res.status}]: ${text || res.statusText}`);
+    }
 
-    return data as T;
+    // 3. Chỉ phân giải JSON nếu văn bản không trống
+    try {
+      return text ? JSON.parse(text) : ({} as T);
+    } catch (e) {
+      // Fallback nếu kết quả không phải JSON nhưng status là OK
+      return text as any;
+    }
   }
 
   // --- XỬ LÝ ĐƯỜNG DẪN ONEDRIVE ---
@@ -99,12 +116,9 @@ export class MicrosoftGraphShop {
 
   // --- ONEDRIVE: UPLOAD FILE ĐƠN HÀNG ---
 
-  /**
-   * Tải nội dung text lên OneDrive dưới dạng file .txt
-   */
   async uploadText(params: {
-    filePath: string; // Tên file (ví dụ: order_id.txt)
-    text: string;     // Danh sách tài khoản
+    filePath: string; 
+    text: string;     
     user?: string;
     folder?: string;
     contentType?: string;
@@ -112,10 +126,9 @@ export class MicrosoftGraphShop {
     const user = params.user ?? this.cfg.defaultUser;
     const fullPath = this.normFilePath(params.filePath, params.folder);
     
-    // Graph API endpoint để tạo/ghi đè file
     const url = `${this.userPath(user)}/drive/root:${fullPath}:/content`;
 
-    const data = await this.graphRequest<any>(url, {
+    const uploadInfo = await this.graphRequest<any>(url, {
       method: "PUT",
       headers: {
         "Content-Type": params.contentType ?? "text/plain; charset=utf-8",
@@ -123,12 +136,9 @@ export class MicrosoftGraphShop {
       body: params.text,
     });
 
-    return { id: data.id, name: data.name, webUrl: data.webUrl };
+    return { id: uploadInfo.id, name: uploadInfo.name, webUrl: uploadInfo.webUrl };
   }
 
-  /**
-   * Đọc nội dung file từ OneDrive (Dùng khi khách hàng muốn xem hàng)
-   */
   async readText(params: { filePath: string; user?: string; folder?: string }): Promise<string> {
     const user = params.user ?? this.cfg.defaultUser;
     const fullPath = this.normFilePath(params.filePath, params.folder);
@@ -154,6 +164,7 @@ export class MicrosoftGraphShop {
       saveToSentItems: opt.saveToSentItems ?? true,
     };
 
+    // sendMail thường trả về 202 và graphRequest mới đã xử lý việc này
     await this.graphRequest(`${this.userPath(fromUser)}/sendMail`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

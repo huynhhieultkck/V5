@@ -67,6 +67,8 @@ CREATE TABLE `CategoryTranslation` (
 CREATE TABLE `Product` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `image` VARCHAR(191) NULL,
+    `icon` VARCHAR(191) NULL,
+    `warrantyDays` INTEGER NOT NULL DEFAULT 0,
     `price` DOUBLE NOT NULL,
     `originalPrice` DOUBLE NULL,
     `type` ENUM('LOCAL', 'RESELL') NOT NULL DEFAULT 'LOCAL',

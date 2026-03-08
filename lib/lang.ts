@@ -17,14 +17,18 @@ interface ITranslations {
   auth_token_invalid: string;
   auth_password_updated: string;
   auth_api_key_generated: string;
+  auth_api_key_deleted: string; // Khóa mới
   auth_unauthorized: string;
   auth_forbidden: string;
+  auth_old_password_invalid: string;
   // Users
   user_not_found: string;
   user_update_success: string;
   user_deleted_success: string;
   user_adjustment_added: string;
   user_adjustment_subtracted: string;
+  user_fetch_error: string;    
+  user_update_error: string;   
   // Categories
   category_fetch_error: string;
   category_not_found: string;
@@ -94,15 +98,19 @@ const messages: Record<Language, ITranslations> = {
     auth_not_found: "Không tìm thấy người dùng.",
     auth_reset_sent: "Vui lòng kiểm tra email của bạn.",
     auth_token_invalid: "Mã xác thực không hợp lệ.",
-    auth_password_updated: "Mật khẩu đã được cập nhật.",
+    auth_password_updated: "Mật khẩu đã được cập nhật thành công.",
     auth_api_key_generated: "API Key đã được tạo thành công.",
+    auth_api_key_deleted: "API Key đã được hủy bỏ thành công.",
     auth_unauthorized: "Vui lòng đăng nhập để thực hiện thao tác này.",
     auth_forbidden: "Bạn không có quyền truy cập khu vực này.",
+    auth_old_password_invalid: "Mật khẩu cũ không chính xác.",
     user_not_found: "Không tìm thấy thành viên.",
     user_update_success: "Cập nhật thông tin thành viên thành công.",
     user_deleted_success: "Đã xóa thành viên khỏi hệ thống.",
     user_adjustment_added: "Quản trị viên nạp tiền thủ công",
     user_adjustment_subtracted: "Quản trị viên trừ tiền thủ công",
+    user_fetch_error: "Lỗi khi tải danh sách thành viên.",
+    user_update_error: "Lỗi khi cập nhật thông tin thành viên.",
     category_fetch_error: "Lỗi khi lấy danh mục.",
     category_not_found: "Không tìm thấy danh mục.",
     category_deleted: "Đã xóa danh mục thành công.",
@@ -155,13 +163,17 @@ const messages: Record<Language, ITranslations> = {
     auth_token_invalid: "Invalid reset token.",
     auth_password_updated: "Password updated successfully.",
     auth_api_key_generated: "API Key has been generated successfully.",
+    auth_api_key_deleted: "API Key has been revoked successfully.",
     auth_unauthorized: "Please login to perform this action.",
     auth_forbidden: "Access denied. Admin rights required.",
+    auth_old_password_invalid: "Old password is incorrect.",
     user_not_found: "User not found.",
     user_update_success: "User updated successfully.",
     user_deleted_success: "User deleted successfully.",
     user_adjustment_added: "Manual balance adjustment: Added",
     user_adjustment_subtracted: "Manual balance adjustment: Subtracted",
+    user_fetch_error: "Error fetching user list.",
+    user_update_error: "Error updating user information.",
     category_fetch_error: "Error fetching categories.",
     category_not_found: "Category not found.",
     category_deleted: "Category deleted successfully.",
@@ -203,24 +215,28 @@ const messages: Record<Language, ITranslations> = {
   RU: {
     system_error: "Системная ошибка.",
     captcha_invalid: "Неверная капча.",
-    rate_limit_exceeded: "Слишком много запросов.",
+    rate_limit_exceeded: "Слишком nhiều запросов.",
     auth_login_success: "Успешный вход.",
-    auth_invalid: "Неверный логин или пароль.",
+    auth_invalid: "Неверный логин hoặc mật khẩu.",
     auth_banned: "Аккаунт заблокирован.",
-    auth_exists: "Пользователь уже существует.",
+    auth_exists: "Пользователь đã tồn tại.",
     auth_register_success: "Регистрация успешна.",
-    auth_not_found: "Пользователь не найден.",
+    auth_not_found: "Пользователь không tìm thấy.",
     auth_reset_sent: "Проверьте почту.",
     auth_token_invalid: "Неверный токен.",
     auth_password_updated: "Пароль обновлен.",
     auth_api_key_generated: "API-ключ создан.",
+    auth_api_key_deleted: "API-ключ успешно аннулирован.",
     auth_unauthorized: "Авторизуйтесь.",
     auth_forbidden: "Доступ запрещен.",
-    user_not_found: "Пользователь не найден.",
+    auth_old_password_invalid: "Старый пароль неверный.",
+    user_not_found: "Пользователь không tìm thấy.",
     user_update_success: "Обновлено.",
     user_deleted_success: "Удалено.",
     user_adjustment_added: "Ручная корректировка: Добавлено",
     user_adjustment_subtracted: "Ручная корректировка: Вычтено",
+    user_fetch_error: "Ошибка получения списка.",
+    user_update_error: "Ошибка обновления.",
     category_fetch_error: "Ошибка категорий.",
     category_not_found: "Не найдено.",
     category_deleted: "Удалено.",
@@ -236,7 +252,7 @@ const messages: Record<Language, ITranslations> = {
     order_not_ready: "Не готов.",
     order_fetch_success: "Список получен.",
     storage_error: "Ошибка хранилища.",
-    stock_not_found: "Элемент не найден.",
+    stock_not_found: "Элемент không tìm thấy.",
     stock_import_success: "Импорт успешен.",
     stock_empty: "Пусто.",
     stock_invalid_type: "Тип không hỗ trợ.",
@@ -257,7 +273,7 @@ const messages: Record<Language, ITranslations> = {
     mail_reset_hello: "Привет",
     mail_reset_text1: "Нажмите для сброса:",
     mail_reset_button: "Сброс",
-    mail_reset_footer: "Проигнорируйте, если không phải вы.",
+    mail_reset_footer: "Проигнорируйте, nếu không phải bạn.",
   },
   ZH: {
     system_error: "系统错误。",
@@ -273,13 +289,17 @@ const messages: Record<Language, ITranslations> = {
     auth_token_invalid: "令牌无效。",
     auth_password_updated: "密码已更新。",
     auth_api_key_generated: "API 密钥已生成。",
+    auth_api_key_deleted: "API 密钥已成功撤销。",
     auth_unauthorized: "请登录后操作。",
     auth_forbidden: "权限不足。",
+    auth_old_password_invalid: "旧密码错误。",
     user_not_found: "找不到用户。",
     user_update_success: "更新成功。",
     user_deleted_success: "删除成功。",
     user_adjustment_added: "手动余额调整：增加",
     user_adjustment_subtracted: "手动余额调整：减少",
+    user_fetch_error: "加载用户列表错误。",
+    user_update_error: "更新用户信息错误。",
     category_fetch_error: "获取分类失败。",
     category_not_found: "找不到分类。",
     category_deleted: "分类已删除。",

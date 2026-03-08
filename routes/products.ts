@@ -13,6 +13,8 @@ if (!JWT_SECRET) {
   throw new Error("CRITICAL: JWT_SECRET environment variable is missing.");
 }
 
+// --- Schemas ---
+
 const translationSchema = z.object({
   language: z.enum(["VI", "EN", "ZH", "RU"]),
   name: z.string().min(1),
@@ -21,7 +23,9 @@ const translationSchema = z.object({
 
 const createProductSchema = z.object({
   categoryId: z.number(),
-  image: z.string().url().optional().nullable(), // Hỗ trợ URL hình ảnh
+  image: z.string().url().optional().nullable(),
+  icon: z.string().url().optional().nullable(), // URL logo sản phẩm
+  warrantyDays: z.number().int().min(0).default(0), // Bảo hành (ngày)
   price: z.number().min(0),
   originalPrice: z.number().optional().nullable(),
   type: z.enum(["LOCAL", "RESELL"]),
@@ -36,6 +40,10 @@ const createProductSchema = z.object({
 
 const updateProductSchema = createProductSchema.partial();
 
+/**
+ * CLIENT: Xem danh sách sản phẩm
+ * Đã sửa logic: Ưu tiên sản phẩm CÒN HÀNG lên trên đầu.
+ */
 productRoutes.get("/view", async (c) => {
   const lang = getLanguage(c);
   const page = Math.max(Number(c.req.query("page") || 1), 1);
@@ -63,16 +71,23 @@ productRoutes.get("/view", async (c) => {
     }
     if (categoryId) whereClause.categoryId = categoryId;
 
-    let orderBy: any = { createdAt: "desc" }; 
+    // Logic Sắp xếp: Luôn ưu tiên sản phẩm còn hàng (resellStock > 0) lên trước
+    // Sau đó mới đến tiêu chí sắp xếp phụ
+    let secondarySort: any = { createdAt: "desc" }; 
     switch (sort) {
-      case "price_asc": orderBy = { price: "asc" }; break;
-      case "price_desc": orderBy = { price: "desc" }; break;
-      case "stock_asc": orderBy = { resellStock: "asc" }; break;
-      case "stock_desc": orderBy = { resellStock: "desc" }; break;
-      case "sold_desc": orderBy = { soldCount: "desc" }; break;
-      case "newest": orderBy = { createdAt: "desc" }; break;
-      case "oldest": orderBy = { createdAt: "asc" }; break;
+      case "price_asc": secondarySort = { price: "asc" }; break;
+      case "price_desc": secondarySort = { price: "desc" }; break;
+      case "stock_asc": secondarySort = { resellStock: "asc" }; break;
+      case "stock_desc": secondarySort = { resellStock: "desc" }; break;
+      case "sold_desc": secondarySort = { soldCount: "desc" }; break;
+      case "newest": secondarySort = { createdAt: "desc" }; break;
+      case "oldest": secondarySort = { createdAt: "asc" }; break;
     }
+
+    const orderBy: any[] = [
+      { resellStock: "desc" }, // Đẩy sản phẩm còn hàng lên trước (stock càng nhiều càng cao)
+      secondarySort            // Sau đó mới đến tiêu chí người dùng chọn
+    ];
 
     const [totalItems, products] = await Promise.all([
       prisma.product.count({ where: whereClause }),
@@ -90,7 +105,9 @@ productRoutes.get("/view", async (c) => {
 
     const result = products.map((p: any) => ({
       id: p.id,
-      image: p.image, // Trả về ảnh ở danh sách
+      image: p.image,
+      icon: p.icon,
+      warrantyDays: p.warrantyDays,
       price: p.price,
       originalPrice: p.originalPrice,
       name: p.translations[0]?.name || "N/A",
@@ -121,6 +138,9 @@ productRoutes.get("/view", async (c) => {
   }
 });
 
+/**
+ * CLIENT: Xem chi tiết sản phẩm
+ */
 productRoutes.get("/detail/:id", async (c) => {
   const lang = getLanguage(c);
   const id = parseInt(c.req.param("id"));
@@ -140,7 +160,9 @@ productRoutes.get("/detail/:id", async (c) => {
       status: "success",
       data: {
         id: product.id,
-        image: product.image, // Trả về ảnh ở chi tiết
+        image: product.image,
+        icon: product.icon,
+        warrantyDays: product.warrantyDays,
         price: product.price,
         originalPrice: product.originalPrice,
         name: product.translations[0]?.name || "N/A",
@@ -157,12 +179,17 @@ productRoutes.get("/detail/:id", async (c) => {
   }
 });
 
+/**
+ * ADMIN: Tạo sản phẩm
+ */
 productRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", createProductSchema), async (c) => {
   const data = c.req.valid("json");
   try {
     const product = await prisma.product.create({
       data: {
         image: data.image ?? null,
+        icon: data.icon ?? null,
+        warrantyDays: data.warrantyDays,
         price: data.price,
         originalPrice: data.originalPrice ?? null,
         type: data.type,
@@ -188,12 +215,17 @@ productRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", crea
   }
 });
 
+/**
+ * ADMIN: Chỉnh sửa sản phẩm
+ */
 productRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updateProductSchema), async (c) => {
   const id = parseInt(c.req.param("id"));
   const data = c.req.valid("json");
   try {
     const updateData: any = {};
     if (data.image !== undefined) updateData.image = data.image ?? null;
+    if (data.icon !== undefined) updateData.icon = data.icon ?? null;
+    if (data.warrantyDays !== undefined) updateData.warrantyDays = data.warrantyDays;
     if (data.price !== undefined) updateData.price = data.price;
     if (data.originalPrice !== undefined) updateData.originalPrice = data.originalPrice ?? null;
     if (data.status !== undefined) updateData.status = data.status;

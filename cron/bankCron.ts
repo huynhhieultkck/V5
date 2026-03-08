@@ -2,11 +2,11 @@ import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 
 const BANK_URLS: Record<string, string> = {
-  vietcombank: 'https://api.web2m.com/historyapivcbv3',
-  bidv: 'https://api.web2m.com/historyapibidvv3',
-  mbbank: 'https://api.web2m.com/historyapimbv3',
-  acb: 'https://api.web2m.com/historyapiacbv3',
-  techcombank: 'https://api.web2m.com/historyapitcbv3'
+  VCB: 'https://api.web2m.com/historyapivcbv3',
+  BIDV: 'https://api.web2m.com/historyapibidvv3',
+  MB: 'https://api.web2m.com/historyapimbv3',
+  ACB: 'https://api.web2m.com/historyapiacbv3',
+  TCB: 'https://api.web2m.com/historyapitcbv3'
 };
 
 const prefix = process.env.DEPOSIT_PREFIX || 'VMMO';
@@ -29,7 +29,6 @@ export async function startBankCron() {
           const url = `${BANK_URLS[bank.code]}/${bank.password}/${bank.accountNumber}/${bank.token}`;
           const res = await fetch(url);
           const response = await res.json();
-
           const transactions = response?.transactions || [];
 
           for (const tx of transactions) {

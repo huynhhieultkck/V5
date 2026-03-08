@@ -58,6 +58,11 @@ const resetPasswordSchema = z.object({
   captchaToken: z.string(),
 });
 
+const changePasswordSchema = z.object({
+  oldPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
+
 /**
  * GET /me - Lấy thông tin profile người dùng hiện tại
  */
@@ -93,6 +98,41 @@ authRoutes.get("/me", authMiddleware, async (c) => {
 });
 
 /**
+ * POST /change-password - Đổi mật khẩu (Dành cho người đã đăng nhập)
+ */
+authRoutes.post("/change-password", authMiddleware, zValidator("json", changePasswordSchema), async (c) => {
+  const payload = c.get("jwtPayload") as CustomJWTPayload;
+  const { oldPassword, newPassword } = c.req.valid("json");
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: payload.id } });
+    if (!user) return c.json({ message: t(c, "auth_not_found") }, 404);
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      return c.json({ message: t(c, "auth_old_password_invalid") }, 400);
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedNewPassword,
+        tokenVersion: { increment: 1 }
+      }
+    });
+
+    return c.json({
+      status: "success",
+      message: t(c, "auth_password_updated")
+    });
+  } catch (error) {
+    return c.json({ message: t(c, "system_error") }, 500);
+  }
+});
+
+/**
  * API Tạo/Cấp mới API Key
  */
 authRoutes.post("/generate-api-key", authMiddleware, async (c) => {
@@ -117,6 +157,28 @@ authRoutes.post("/generate-api-key", authMiddleware, async (c) => {
   }
 });
 
+/**
+ * API Hủy bỏ API Key (Dành cho người dùng không muốn dùng API nữa)
+ */
+authRoutes.post("/revoke-api-key", authMiddleware, async (c) => {
+  const payload = c.get("jwtPayload") as CustomJWTPayload;
+  const userId = payload.id;
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { apiKey: null }
+    });
+
+    return c.json({
+      status: "success",
+      message: t(c, "auth_api_key_deleted")
+    });
+  } catch (error) {
+    return c.json({ message: t(c, "system_error") }, 500);
+  }
+});
+
 // --- REGISTER ---
 authRoutes.post(
   "/register", 
@@ -125,8 +187,8 @@ authRoutes.post(
   async (c) => {
     const { username, email, password, captchaToken } = c.req.valid("json");
 
-    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const existingUser = await prisma.user.findFirst({
@@ -163,8 +225,8 @@ authRoutes.post(
   async (c) => {
     const { username, password, captchaToken } = c.req.valid("json");
 
-    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const user = await prisma.user.findUnique({ where: { username } });
@@ -200,7 +262,6 @@ authRoutes.post(
           role: user.role,
           balance: user.balance,
           wallet: user.wallet
-          // apiKey đã được loại bỏ tại đây để bảo mật
         }
       });
     } catch (e) {
@@ -216,8 +277,8 @@ authRoutes.post(
   zValidator("json", forgotPasswordSchema), 
   async (c) => {
     const { email, captchaToken } = c.req.valid("json");
-    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
@@ -267,8 +328,8 @@ authRoutes.post(
   zValidator("json", resetPasswordSchema), 
   async (c) => {
     const { token, newPassword, captchaToken } = c.req.valid("json");
-    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const user = await prisma.user.findUnique({

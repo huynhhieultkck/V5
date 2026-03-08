@@ -88,7 +88,6 @@ async function startWorker() {
           // Lấy từ nguồn CMSNT (Resell)
           const cmsnt = new CMSNTService(product.resellDomain!, product.resellApiKey!);
           const res = await cmsnt.buyProduct(product.resellProductId!, amount);
-          
           if (res.status !== "success" || !Array.isArray(res.data)) {
             throw new Error(res.msg || "Lỗi API shop nguồn");
           }

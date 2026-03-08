@@ -22,11 +22,10 @@ export async function syncResellStock() {
         ]
       }
     });
-
+    
     for (const product of resellProducts) {
       const cmsnt = new CMSNTService(product.resellDomain!, product.resellApiKey!);
       const currentStock = await cmsnt.getStock(product.resellProductId!);
-
       // 2. Cập nhật vào Database của mình
       await prisma.product.update({
         where: { id: product.id },
