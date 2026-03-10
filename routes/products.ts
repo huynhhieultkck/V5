@@ -24,8 +24,8 @@ const translationSchema = z.object({
 const createProductSchema = z.object({
   categoryId: z.number(),
   image: z.string().url().optional().nullable(),
-  icon: z.string().url().optional().nullable(), // URL logo sản phẩm
-  warrantyDays: z.number().int().min(0).default(0), // Bảo hành (ngày)
+  icon: z.string().url().optional().nullable(), 
+  warrantyDays: z.number().int().min(0).default(0), 
   price: z.number().min(0),
   originalPrice: z.number().optional().nullable(),
   type: z.enum(["LOCAL", "RESELL"]),
@@ -41,8 +41,8 @@ const createProductSchema = z.object({
 const updateProductSchema = createProductSchema.partial();
 
 /**
- * CLIENT: Xem danh sách sản phẩm
- * Đã sửa logic: Ưu tiên sản phẩm CÒN HÀNG lên trên đầu.
+ * CLIENT & ADMIN: Xem danh sách sản phẩm
+ * Đã cập nhật: Trả về thông tin Resell nếu là Admin
  */
 productRoutes.get("/view", async (c) => {
   const lang = getLanguage(c);
@@ -63,7 +63,7 @@ productRoutes.get("/view", async (c) => {
   }
 
   try {
-    const whereClause: any = { status: true };
+    const whereClause: any = isAdmin ? {} : { status: true };
     if (search) {
       whereClause.translations = {
         some: { language: lang, name: { contains: search } }
@@ -71,8 +71,6 @@ productRoutes.get("/view", async (c) => {
     }
     if (categoryId) whereClause.categoryId = categoryId;
 
-    // Logic Sắp xếp: Luôn ưu tiên sản phẩm còn hàng (resellStock > 0) lên trước
-    // Sau đó mới đến tiêu chí sắp xếp phụ
     let secondarySort: any = { createdAt: "desc" }; 
     switch (sort) {
       case "price_asc": secondarySort = { price: "asc" }; break;
@@ -85,8 +83,8 @@ productRoutes.get("/view", async (c) => {
     }
 
     const orderBy: any[] = [
-      { resellStock: "desc" }, // Đẩy sản phẩm còn hàng lên trước (stock càng nhiều càng cao)
-      secondarySort            // Sau đó mới đến tiêu chí người dùng chọn
+      { resellStock: "desc" }, 
+      secondarySort            
     ];
 
     const [totalItems, products] = await Promise.all([
@@ -120,7 +118,14 @@ productRoutes.get("/view", async (c) => {
       maxPurchase: p.maxPurchase,
       stock: p.resellStock,
       soldCount: p.soldCount,
-      ...(isAdmin && { type: p.type })
+      status: p.status,
+      // Trả về thông tin cấu hình cho Admin
+      ...(isAdmin && { 
+        type: p.type,
+        resellDomain: p.resellDomain,
+        resellApiKey: p.resellApiKey,
+        resellProductId: p.resellProductId
+      })
     }));
 
     return c.json({
@@ -139,11 +144,21 @@ productRoutes.get("/view", async (c) => {
 });
 
 /**
- * CLIENT: Xem chi tiết sản phẩm
+ * CLIENT & ADMIN: Xem chi tiết sản phẩm
  */
 productRoutes.get("/detail/:id", async (c) => {
   const lang = getLanguage(c);
   const id = parseInt(c.req.param("id"));
+
+  let isAdmin = false;
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const payload = await verify(token!, JWT_SECRET, "HS256") as any;
+      if (payload?.role === "ADMIN") isAdmin = true;
+    } catch (e) {}
+  }
 
   try {
     const product = await prisma.product.findUnique({
@@ -154,7 +169,9 @@ productRoutes.get("/detail/:id", async (c) => {
       }
     });
 
-    if (!product || !product.status) return c.json({ message: t(c, "product_not_found") }, 404);
+    if (!product || (!product.status && !isAdmin)) {
+      return c.json({ message: t(c, "product_not_found") }, 404);
+    }
 
     return c.json({
       status: "success",
@@ -171,7 +188,15 @@ productRoutes.get("/detail/:id", async (c) => {
         stock: product.resellStock,
         soldCount: product.soldCount,
         minPurchase: product.minPurchase,
-        maxPurchase: product.maxPurchase
+        maxPurchase: product.maxPurchase,
+        status: product.status,
+        // Trả về thông tin cấu hình cho Admin
+        ...(isAdmin && { 
+          type: product.type,
+          resellDomain: product.resellDomain,
+          resellApiKey: product.resellApiKey,
+          resellProductId: product.resellProductId
+        })
       }
     });
   } catch (error) {
