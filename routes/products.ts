@@ -32,8 +32,7 @@ const createProductSchema = z.object({
   status: z.boolean().default(true),
   minPurchase: z.number().min(1).default(1),
   maxPurchase: z.number().optional().nullable(),
-  resellDomain: z.string().optional().nullable(),
-  resellApiKey: z.string().optional().nullable(),
+  resellProviderId: z.number().optional().nullable(),
   resellProductId: z.string().optional().nullable(),
   translations: z.array(translationSchema).min(1),
 });
@@ -42,7 +41,7 @@ const updateProductSchema = createProductSchema.partial();
 
 /**
  * CLIENT & ADMIN: Xem danh sách sản phẩm
- * Đã cập nhật: Trả về thông tin Resell nếu là Admin
+ * Đã sửa lỗi: Ưu tiên lựa chọn sắp xếp của người dùng lên hàng đầu
  */
 productRoutes.get("/view", async (c) => {
   const lang = getLanguage(c);
@@ -71,20 +70,26 @@ productRoutes.get("/view", async (c) => {
     }
     if (categoryId) whereClause.categoryId = categoryId;
 
-    let secondarySort: any = { createdAt: "desc" }; 
+    // Xác định tiêu chí sắp xếp chính dựa trên yêu cầu của người dùng
+    let primarySort: any = { createdAt: "desc" }; 
     switch (sort) {
-      case "price_asc": secondarySort = { price: "asc" }; break;
-      case "price_desc": secondarySort = { price: "desc" }; break;
-      case "stock_asc": secondarySort = { resellStock: "asc" }; break;
-      case "stock_desc": secondarySort = { resellStock: "desc" }; break;
-      case "sold_desc": secondarySort = { soldCount: "desc" }; break;
-      case "newest": secondarySort = { createdAt: "desc" }; break;
-      case "oldest": secondarySort = { createdAt: "asc" }; break;
+      case "price_asc": primarySort = { price: "asc" }; break;
+      case "price_desc": primarySort = { price: "desc" }; break;
+      case "stock_asc": primarySort = { resellStock: "asc" }; break;
+      case "stock_desc": primarySort = { resellStock: "desc" }; break;
+      case "sold_desc": primarySort = { soldCount: "desc" }; break;
+      case "newest": primarySort = { createdAt: "desc" }; break;
+      case "oldest": primarySort = { createdAt: "asc" }; break;
     }
 
+    /**
+     * CƠ CHẾ SẮP XẾP MỚI:
+     * 1. Luôn ưu tiên tiêu chí người dùng chọn (primarySort).
+     * 2. Nếu các sản phẩm trùng tiêu chí chính, dùng id giảm dần để đảm bảo kết quả ổn định.
+     */
     const orderBy: any[] = [
-      { resellStock: "desc" }, 
-      secondarySort            
+      primarySort,
+      { id: "desc" }
     ];
 
     const [totalItems, products] = await Promise.all([
@@ -96,7 +101,8 @@ productRoutes.get("/view", async (c) => {
         orderBy: orderBy,
         include: {
           translations: { where: { language: lang } },
-          category: { include: { translations: { where: { language: lang } } } }
+          category: { include: { translations: { where: { language: lang } } } },
+          resellProvider: true
         }
       })
     ]);
@@ -119,11 +125,10 @@ productRoutes.get("/view", async (c) => {
       stock: p.resellStock,
       soldCount: p.soldCount,
       status: p.status,
-      // Trả về thông tin cấu hình cho Admin
       ...(isAdmin && { 
         type: p.type,
-        resellDomain: p.resellDomain,
-        resellApiKey: p.resellApiKey,
+        resellProviderId: p.resellProviderId,
+        resellProvider: p.resellProvider,
         resellProductId: p.resellProductId
       })
     }));
@@ -165,7 +170,8 @@ productRoutes.get("/detail/:id", async (c) => {
       where: { id },
       include: {
         translations: { where: { language: lang } },
-        category: { include: { translations: { where: { language: lang } } } }
+        category: { include: { translations: { where: { language: lang } } } },
+        resellProvider: true
       }
     });
 
@@ -190,11 +196,10 @@ productRoutes.get("/detail/:id", async (c) => {
         minPurchase: product.minPurchase,
         maxPurchase: product.maxPurchase,
         status: product.status,
-        // Trả về thông tin cấu hình cho Admin
         ...(isAdmin && { 
           type: product.type,
-          resellDomain: product.resellDomain,
-          resellApiKey: product.resellApiKey,
+          resellProviderId: product.resellProviderId,
+          resellProvider: product.resellProvider,
           resellProductId: product.resellProductId
         })
       }
@@ -212,6 +217,7 @@ productRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", crea
   try {
     const product = await prisma.product.create({
       data: {
+        categoryId: data.categoryId,
         image: data.image ?? null,
         icon: data.icon ?? null,
         warrantyDays: data.warrantyDays,
@@ -221,10 +227,8 @@ productRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", crea
         status: data.status,
         minPurchase: data.minPurchase,
         maxPurchase: data.maxPurchase ?? null,
-        categoryId: data.categoryId,
-        resellDomain: data.resellDomain ?? null,
-        resellApiKey: data.resellApiKey ?? null,
-        resellProductId: data.resellProductId ?? null,
+        resellProviderId: data.type === "RESELL" ? (data.resellProviderId ?? null) : null,
+        resellProductId: data.type === "RESELL" ? (data.resellProductId ?? null) : null,
         translations: {
           create: data.translations.map(t => ({
             language: t.language,
@@ -248,17 +252,19 @@ productRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", up
   const data = c.req.valid("json");
   try {
     const updateData: any = {};
+    
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
     if (data.image !== undefined) updateData.image = data.image ?? null;
     if (data.icon !== undefined) updateData.icon = data.icon ?? null;
     if (data.warrantyDays !== undefined) updateData.warrantyDays = data.warrantyDays;
     if (data.price !== undefined) updateData.price = data.price;
     if (data.originalPrice !== undefined) updateData.originalPrice = data.originalPrice ?? null;
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
     if (data.type !== undefined) updateData.type = data.type;
+    if (data.minPurchase !== undefined) updateData.minPurchase = data.minPurchase;
+    if (data.maxPurchase !== undefined) updateData.maxPurchase = data.maxPurchase ?? null;
     
-    if (data.resellDomain !== undefined) updateData.resellDomain = data.resellDomain ?? null;
-    if (data.resellApiKey !== undefined) updateData.resellApiKey = data.resellApiKey ?? null;
+    if (data.resellProviderId !== undefined) updateData.resellProviderId = data.resellProviderId ?? null;
     if (data.resellProductId !== undefined) updateData.resellProductId = data.resellProductId ?? null;
 
     if (data.translations) {
@@ -271,7 +277,11 @@ productRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", up
       };
     }
 
-    const product = await prisma.product.update({ where: { id }, data: updateData });
+    const product = await prisma.product.update({ 
+      where: { id }, 
+      data: updateData 
+    });
+    
     return c.json({ status: "success", data: product });
   } catch (e) {
     return c.json({ message: t(c, "system_error") }, 500);

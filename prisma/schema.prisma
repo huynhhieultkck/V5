@@ -113,6 +113,21 @@ model CategoryTranslation {
   @@unique([categoryId, language])
 }
 
+// --- NHÀ CUNG CẤP (RESELL PROVIDER) ---
+
+model ResellProvider {
+  id        Int      @id @default(autoincrement())
+  name      String   // Tên hiển thị để bạn phân biệt (Ví dụ: Shop Via 1s, Mail72h)
+  type      String   @default("CMSNT") // Loại mã nguồn để Worker chọn logic (CMSNT, WHMCS...)
+  domain    String
+  apiKey    String
+  status    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  products  Product[]
+}
+
 // --- SẢN PHẨM ---
 
 model Product {
@@ -129,10 +144,11 @@ model Product {
   minPurchase     Int                  @default(1)
   maxPurchase     Int?                 
   
-  // Cấu hình Resell
-  resellDomain    String?
-  resellApiKey    String?
-  resellProductId String?
+  // Liên kết với nhà cung cấp
+  resellProviderId Int?
+  resellProvider   ResellProvider? @relation(fields: [resellProviderId], references: [id])
+  resellProductId  String?         // ID sản phẩm bên shop nguồn
+  
   resellStock     Int                  @default(0)
   lastSyncAt      DateTime?            
   

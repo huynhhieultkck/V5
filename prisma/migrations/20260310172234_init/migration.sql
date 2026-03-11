@@ -64,6 +64,20 @@ CREATE TABLE `CategoryTranslation` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `ResellProvider` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(191) NOT NULL,
+    `type` VARCHAR(191) NOT NULL DEFAULT 'CMSNT',
+    `domain` VARCHAR(191) NOT NULL,
+    `apiKey` VARCHAR(191) NOT NULL,
+    `status` BOOLEAN NOT NULL DEFAULT true,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `Product` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `image` VARCHAR(191) NULL,
@@ -75,8 +89,7 @@ CREATE TABLE `Product` (
     `status` BOOLEAN NOT NULL DEFAULT true,
     `minPurchase` INTEGER NOT NULL DEFAULT 1,
     `maxPurchase` INTEGER NULL,
-    `resellDomain` VARCHAR(191) NULL,
-    `resellApiKey` VARCHAR(191) NULL,
+    `resellProviderId` INTEGER NULL,
     `resellProductId` VARCHAR(191) NULL,
     `resellStock` INTEGER NOT NULL DEFAULT 0,
     `lastSyncAt` DATETIME(3) NULL,
@@ -182,6 +195,9 @@ CREATE TABLE `Job` (
 
 -- AddForeignKey
 ALTER TABLE `CategoryTranslation` ADD CONSTRAINT `CategoryTranslation_categoryId_fkey` FOREIGN KEY (`categoryId`) REFERENCES `Category`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Product` ADD CONSTRAINT `Product_resellProviderId_fkey` FOREIGN KEY (`resellProviderId`) REFERENCES `ResellProvider`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Product` ADD CONSTRAINT `Product_categoryId_fkey` FOREIGN KEY (`categoryId`) REFERENCES `Category`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

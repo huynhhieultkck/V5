@@ -3,39 +3,50 @@ import { CMSNTService } from "./cmsnt";
 import { logger } from "./logger";
 
 /**
- * Hàm này sẽ được gọi bởi một Cron Job định kỳ
- * Tác dụng: Quét các sản phẩm RESELL và cập nhật số lượng tồn kho từ nguồn
+ * Đồng bộ tồn kho từ các nguồn Resell Provider
  */
 export async function syncResellStock() {
   logger.log("[Sync] Bắt đầu đồng bộ kho hàng Resell...");
 
   try {
-    // 1. Lấy tất cả sản phẩm là RESELL và có đủ thông tin API
     const resellProducts = await prisma.product.findMany({
       where: {
         type: "RESELL",
         status: true,
-        NOT: [
-          { resellDomain: null },
-          { resellApiKey: null },
-          { resellProductId: null }
-        ]
+        NOT: {
+          resellProviderId: null
+        }
+      },
+      include: {
+        resellProvider: true
       }
     });
     
     for (const product of resellProducts) {
-      const cmsnt = new CMSNTService(product.resellDomain!, product.resellApiKey!);
-      const currentStock = await cmsnt.getStock(product.resellProductId!);
-      // 2. Cập nhật vào Database của mình
-      await prisma.product.update({
-        where: { id: product.id },
-        data: {
-          resellStock: currentStock,
-          lastSyncAt: new Date()
-        }
-      });
+      const provider = product.resellProvider;
+      
+      if (!provider || !product.resellProductId) continue;
 
-      logger.log(`[Sync] Đã cập nhật sản phẩm ID ${product.id}: ${currentStock} còn lại.`);
+      try {
+        let currentStock = 0;
+
+        if (provider.type === "CMSNT") {
+          const cmsnt = new CMSNTService(provider.domain, provider.apiKey);
+          currentStock = await cmsnt.getStock(product.resellProductId);
+        }
+
+        await prisma.product.update({
+          where: { id: product.id },
+          data: {
+            resellStock: currentStock,
+            lastSyncAt: new Date()
+          }
+        });
+
+        logger.log(`[Sync] Sản phẩm ID ${product.id} (Nguồn: ${provider.name}): ${currentStock} còn lại.`);
+      } catch (productErr: any) {
+        logger.error(`[Sync] Lỗi cập nhật sản phẩm ID ${product.id}:`, productErr.message);
+      }
     }
 
     logger.log("[Sync] Hoàn tất đồng bộ.");

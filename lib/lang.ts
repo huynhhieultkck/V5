@@ -17,7 +17,7 @@ interface ITranslations {
   auth_token_invalid: string;
   auth_password_updated: string;
   auth_api_key_generated: string;
-  auth_api_key_deleted: string; // Khóa mới
+  auth_api_key_deleted: string; 
   auth_unauthorized: string;
   auth_forbidden: string;
   auth_old_password_invalid: string;
@@ -69,6 +69,10 @@ interface ITranslations {
   // Stats & Transactions
   stats_fetch_success: string;
   transaction_fetch_success: string;
+  // Resellers
+  reseller_not_found: string;
+  reseller_deleted: string;
+  reseller_update_success: string;
   // Email
   mail_reset_subject: string;
   mail_reset_hello: string;
@@ -143,6 +147,9 @@ const messages: Record<Language, ITranslations> = {
     bank_update_success: "Cập nhật ngân hàng thành công.",
     stats_fetch_success: "Lấy số liệu thống kê thành công.",
     transaction_fetch_success: "Lấy lịch sử giao dịch thành công.",
+    reseller_not_found: "Không tìm thấy nhà cung cấp.",
+    reseller_deleted: "Đã xóa nhà cung cấp thành công.",
+    reseller_update_success: "Cập nhật nhà cung cấp thành công.",
     mail_reset_subject: "Yêu cầu đặt lại mật khẩu",
     mail_reset_hello: "Xin chào",
     mail_reset_text1: "Bạn đã yêu cầu đặt lại mật khẩu. Vui lòng nhấn nút bên dưới:",
@@ -206,6 +213,9 @@ const messages: Record<Language, ITranslations> = {
     bank_update_success: "Bank updated.",
     stats_fetch_success: "Statistics fetched.",
     transaction_fetch_success: "Transactions fetched.",
+    reseller_not_found: "Reseller not found.",
+    reseller_deleted: "Reseller deleted successfully.",
+    reseller_update_success: "Reseller updated successfully.",
     mail_reset_subject: "Password Reset Request",
     mail_reset_hello: "Hello",
     mail_reset_text1: "You requested a password reset. Please click below:",
@@ -269,6 +279,9 @@ const messages: Record<Language, ITranslations> = {
     bank_update_success: "Обновлено.",
     stats_fetch_success: "Статистика получена.",
     transaction_fetch_success: "Транзакции получены.",
+    reseller_not_found: "Реселлер не найден.",
+    reseller_deleted: "Реселлер удален.",
+    reseller_update_success: "Реселлер обновлен.",
     mail_reset_subject: "Сброс пароля",
     mail_reset_hello: "Привет",
     mail_reset_text1: "Нажмите для сброса:",
@@ -297,7 +310,7 @@ const messages: Record<Language, ITranslations> = {
     user_update_success: "更新成功。",
     user_deleted_success: "删除成功。",
     user_adjustment_added: "手动余额调整：增加",
-    user_adjustment_subtracted: "手动余额调整：减少",
+    user_adjustment_subtracted: "手动余额調整：减少",
     user_fetch_error: "加载用户列表错误。",
     user_update_error: "更新用户信息错误。",
     category_fetch_error: "获取分类失败。",
@@ -332,6 +345,9 @@ const messages: Record<Language, ITranslations> = {
     bank_update_success: "更新成功。",
     stats_fetch_success: "统计获取成功。",
     transaction_fetch_success: "交易获取成功。",
+    reseller_not_found: "找不到转售商。",
+    reseller_deleted: "转售商已删除。",
+    reseller_update_success: "转售商已更新。",
     mail_reset_subject: "重置密码",
     mail_reset_hello: "您好",
     mail_reset_text1: "请点击下方按钮重置：",
