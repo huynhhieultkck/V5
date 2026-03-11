@@ -7,8 +7,8 @@ import { authMiddleware, adminMiddleware } from "../middlewares/auth";
 
 const resellerRoutes = new Hono();
 
-// Danh sách các loại nguồn hàng được hệ thống hỗ trợ xử lý
-const SUPPORTED_RESELL_TYPES = ["CMSNT"];
+// Thêm SHOPGMAIL9999 vào danh sách các loại nguồn hàng hỗ trợ
+const SUPPORTED_RESELL_TYPES = ["CMSNT", "SHOPGMAIL9999"];
 
 const resellerSchema = z.object({
   name: z.string().min(1),
@@ -19,7 +19,7 @@ const resellerSchema = z.object({
 });
 
 /**
- * Admin: Lấy danh sách các loại nguồn hàng được hỗ trợ (CMSNT, v.v.)
+ * Admin: Lấy danh sách các loại nguồn hàng được hỗ trợ
  */
 resellerRoutes.get("/types", authMiddleware, adminMiddleware, async (c) => {
   return c.json({

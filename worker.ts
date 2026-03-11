@@ -1,13 +1,14 @@
 import { prisma } from "./lib/prisma";
 import { CMSNTService } from "./lib/cmsnt";
+import { ShopGmailService } from "./lib/shopgmail";
 import { mailService } from "./lib/mail";
 import { logger } from "./lib/logger";
 
 /**
- * Worker xử lý hàng đợi đơn hàng - Đã sửa lỗi Job Duplication & Resell Provider logic
+ * Worker xử lý hàng đợi đơn hàng - Đã sửa lỗi Job Duplication & Đa nguồn Resell
  */
 async function startWorker() {
-  logger.log("--- Order Worker is running with Strict Locking & Provider Support... ---");
+  logger.log("--- Order Worker is running with Strict Locking & Multi-Resell Support... ---");
 
   while (true) {
     try {
@@ -93,6 +94,13 @@ async function startWorker() {
               throw new Error(res.msg || "Lỗi API shop nguồn CMSNT");
             }
             deliveryData = res.data;
+          } else if (provider.type === "SHOPGMAIL9999") {
+            const shopGmail = new ShopGmailService(provider.domain, provider.apiKey);
+            const res = await shopGmail.buyProduct(product.resellProductId!, amount);
+            if (res.success !== true || !res.data || !Array.isArray(res.data.accounts)) {
+              throw new Error(res.message || "Lỗi API shop nguồn SHOPGMAIL9999");
+            }
+            deliveryData = res.data.accounts;
           } else {
             throw new Error(`LOẠI_NHÀ_CUNG_CẤP_CHƯA_HỖ_TRỢ: ${provider.type}`);
           }

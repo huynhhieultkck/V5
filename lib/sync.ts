@@ -1,9 +1,10 @@
 import { prisma } from "./prisma";
 import { CMSNTService } from "./cmsnt";
+import { ShopGmailService } from "./shopgmail";
 import { logger } from "./logger";
 
 /**
- * Đồng bộ tồn kho từ các nguồn Resell Provider
+ * Đồng bộ tồn kho từ các nguồn Resell Provider (Hỗ trợ CMSNT và SHOPGMAIL9999)
  */
 export async function syncResellStock() {
   logger.log("[Sync] Bắt đầu đồng bộ kho hàng Resell...");
@@ -33,6 +34,9 @@ export async function syncResellStock() {
         if (provider.type === "CMSNT") {
           const cmsnt = new CMSNTService(provider.domain, provider.apiKey);
           currentStock = await cmsnt.getStock(product.resellProductId);
+        } else if (provider.type === "SHOPGMAIL9999") {
+          const shopGmail = new ShopGmailService(provider.domain, provider.apiKey);
+          currentStock = await shopGmail.getStock(product.resellProductId);
         }
 
         await prisma.product.update({
@@ -43,7 +47,7 @@ export async function syncResellStock() {
           }
         });
 
-        logger.log(`[Sync] Sản phẩm ID ${product.id} (Nguồn: ${provider.name}): ${currentStock} còn lại.`);
+        logger.log(`[Sync] Sản phẩm ID ${product.id} (Nguồn: ${provider.name} - ${provider.type}): ${currentStock} còn lại.`);
       } catch (productErr: any) {
         logger.error(`[Sync] Lỗi cập nhật sản phẩm ID ${product.id}:`, productErr.message);
       }

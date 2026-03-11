@@ -187,8 +187,8 @@ authRoutes.post(
   async (c) => {
     const { username, email, password, captchaToken } = c.req.valid("json");
 
-    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const existingUser = await prisma.user.findFirst({
@@ -225,8 +225,8 @@ authRoutes.post(
   async (c) => {
     const { username, password, captchaToken } = c.req.valid("json");
 
-    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const user = await prisma.user.findUnique({ where: { username } });
@@ -277,8 +277,8 @@ authRoutes.post(
   zValidator("json", forgotPasswordSchema), 
   async (c) => {
     const { email, captchaToken } = c.req.valid("json");
-    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
@@ -328,8 +328,8 @@ authRoutes.post(
   zValidator("json", resetPasswordSchema), 
   async (c) => {
     const { token, newPassword, captchaToken } = c.req.valid("json");
-    // const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
-    // if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
+    const isCaptchaValid = await verifyTurnstile(captchaToken, c.req.header("x-forwarded-for"));
+    if (!isCaptchaValid) return c.json({ message: t(c, "captcha_invalid") }, 400);
 
     try {
       const user = await prisma.user.findUnique({
