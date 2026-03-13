@@ -8,6 +8,8 @@ import { authMiddleware, adminMiddleware } from "../middlewares/auth";
 const couponRoutes = new Hono();
 
 // --- Schemas ---
+
+// Cập nhật schema để hỗ trợ productId và categoryId (optional)
 const createCouponSchema = z.object({
   code: z.string().min(3).toUpperCase(),
   discount: z.number().min(0),
@@ -17,16 +19,20 @@ const createCouponSchema = z.object({
   usageLimit: z.number().int().min(1).default(1),
   expiryDate: z.string().optional().nullable(),
   status: z.boolean().default(true),
+  productId: z.number().optional().nullable(), // Thêm ràng buộc sản phẩm
+  categoryId: z.number().optional().nullable(), // Thêm ràng buộc danh mục
 });
 
 const updateCouponSchema = createCouponSchema.partial();
 
 /**
  * Public: Kiểm tra mã giảm giá
+ * Query Params: code, amount, productId
  */
 couponRoutes.get("/check/:code", authMiddleware, async (c) => {
   const code = c.req.param("code").toUpperCase();
   const subTotal = Number(c.req.query("amount") || 0);
+  const productId = c.req.query("productId") ? Number(c.req.query("productId")) : undefined;
 
   try {
     const coupon = await prisma.coupon.findUnique({
@@ -35,16 +41,38 @@ couponRoutes.get("/check/:code", authMiddleware, async (c) => {
 
     if (!coupon) return c.json({ message: t(c, "coupon_invalid") }, 400);
 
+    // 1. Kiểm tra ngày hết hạn
     if (coupon.expiryDate && new Date() > coupon.expiryDate) {
       return c.json({ message: t(c, "coupon_invalid") }, 400);
     }
 
+    // 2. Kiểm tra giới hạn lượt dùng
     if (coupon.usedCount >= coupon.usageLimit) {
       return c.json({ message: t(c, "coupon_usage_limit") }, 400);
     }
 
+    // 3. Kiểm tra giá trị đơn hàng tối thiểu
     if (subTotal < coupon.minOrder) {
       return c.json({ message: t(c, "coupon_min_order") }, 400);
+    }
+
+    // 4. KIỂM TRA RÀNG BUỘC SẢN PHẨM / DANH MỤC (NẾU CÓ TRUYỀN PRODUCTID)
+    if (productId) {
+      // Nếu coupon chỉ cho 1 SP mà ID truyền lên không khớp
+      if (coupon.productId && coupon.productId !== productId) {
+        return c.json({ message: t(c, "coupon_not_applicable") }, 400);
+      }
+
+      // Nếu coupon chỉ cho 1 danh mục, ta phải check danh mục của SP đó
+      if (coupon.categoryId) {
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { categoryId: true }
+        });
+        if (!product || product.categoryId !== coupon.categoryId) {
+          return c.json({ message: t(c, "coupon_not_applicable") }, 400);
+        }
+      }
     }
 
     let discountAmount = 0;
@@ -78,7 +106,6 @@ couponRoutes.get("/check/:code", authMiddleware, async (c) => {
  */
 couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
   const page = Math.max(Number(c.req.query("page") || 1), 1);
-  // Áp dụng giới hạn limit tối đa là 100
   const limit = Math.min(Math.max(Number(c.req.query("limit") || 10), 1), 100);
   const search = c.req.query("search");
   const statusStr = c.req.query("status");
@@ -110,18 +137,17 @@ couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
         where,
         take: limit,
         skip: (page - 1) * limit,
-        orderBy
+        orderBy,
+        include: {
+          product: { select: { translations: { take: 1, select: { name: true } } } },
+          category: { select: { translations: { take: 1, select: { name: true } } } }
+        }
       })
     ]);
 
     return c.json({
       status: "success",
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit)
-      },
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       data: coupons
     });
   } catch (error) {
@@ -129,7 +155,9 @@ couponRoutes.get("/admin/list", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
-// ... (Các API khác như CRUD giữ nguyên)
+/**
+ * Admin: Tạo mã giảm giá
+ */
 couponRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", createCouponSchema), async (c) => {
   const data = c.req.valid("json");
 
@@ -143,7 +171,9 @@ couponRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", creat
         maxDiscount: data.maxDiscount ?? null,
         usageLimit: data.usageLimit,
         expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
-        status: data.status
+        status: data.status,
+        productId: data.productId ?? null,
+        categoryId: data.categoryId ?? null,
       }
     });
     return c.json({ status: "success", data: coupon }, 201);
@@ -152,6 +182,9 @@ couponRoutes.post("/", authMiddleware, adminMiddleware, zValidator("json", creat
   }
 });
 
+/**
+ * Admin: Cập nhật mã giảm giá
+ */
 couponRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", updateCouponSchema), async (c) => {
   const id = parseInt(c.req.param("id"));
   const data = c.req.valid("json");
@@ -160,6 +193,8 @@ couponRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", upd
     const updateData: any = { ...data };
     if (data.expiryDate !== undefined) updateData.expiryDate = data.expiryDate ? new Date(data.expiryDate) : null;
     if (data.maxDiscount !== undefined) updateData.maxDiscount = data.maxDiscount ?? null;
+    if (data.productId !== undefined) updateData.productId = data.productId ?? null;
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId ?? null;
 
     const coupon = await prisma.coupon.update({
       where: { id },
@@ -171,6 +206,9 @@ couponRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", upd
   }
 });
 
+/**
+ * Admin: Xóa mã giảm giá
+ */
 couponRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = parseInt(c.req.param("id"));
   try {

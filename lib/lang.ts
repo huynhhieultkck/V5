@@ -58,6 +58,7 @@ interface ITranslations {
   coupon_invalid: string;
   coupon_usage_limit: string;
   coupon_min_order: string;
+  coupon_not_applicable: string; // Key mới cho coupon theo sản phẩm/danh mục
   coupon_deleted: string;
   // Deposit
   deposit_amount_invalid: string;
@@ -139,6 +140,7 @@ const messages: Record<Language, ITranslations> = {
     coupon_invalid: "Mã giảm giá không hợp lệ hoặc đã hết hạn.",
     coupon_usage_limit: "Mã giảm giá đã hết lượt sử dụng.",
     coupon_min_order: "Đơn hàng chưa đạt giá trị tối thiểu để sử dụng mã này.",
+    coupon_not_applicable: "Mã giảm giá không áp dụng cho sản phẩm hoặc danh mục này.",
     coupon_deleted: "Đã xóa mã giảm giá thành công.",
     deposit_amount_invalid: "Số tiền nạp không hợp lệ (Tối thiểu 1 USD).",
     deposit_create_fail: "Không thể tạo hóa đơn nạp tiền.",
@@ -205,6 +207,7 @@ const messages: Record<Language, ITranslations> = {
     coupon_invalid: "Coupon is invalid or expired.",
     coupon_usage_limit: "Coupon usage limit reached.",
     coupon_min_order: "Minimum order value not met.",
+    coupon_not_applicable: "Coupon is not applicable to this product or category.",
     coupon_deleted: "Coupon deleted successfully.",
     deposit_amount_invalid: "Invalid amount (Min 1 USD).",
     deposit_create_fail: "Failed to create invoice.",
@@ -271,6 +274,7 @@ const messages: Record<Language, ITranslations> = {
     coupon_invalid: "Купон недействителен.",
     coupon_usage_limit: "Лимит исчерпан.",
     coupon_min_order: "Мин. сумма không đạt.",
+    coupon_not_applicable: "Купон не применим к этому товару или категории.",
     coupon_deleted: "Купон удален.",
     deposit_amount_invalid: "Мин. 1 USD.",
     deposit_create_fail: "Ошибка создания счета.",
@@ -337,6 +341,7 @@ const messages: Record<Language, ITranslations> = {
     coupon_invalid: "优惠券无效。",
     coupon_usage_limit: "次数已达上限。",
     coupon_min_order: "未达起用金额。",
+    coupon_not_applicable: "优惠券不适用于此产品或类别。",
     coupon_deleted: "优惠券已删除。",
     deposit_amount_invalid: "最小 1 美元。",
     deposit_create_fail: "创建失败。",

@@ -99,6 +99,7 @@ model Category {
   
   translations CategoryTranslation[]
   products     Product[]
+  coupons      Coupon[]
 }
 
 model CategoryTranslation {
@@ -161,6 +162,7 @@ model Product {
   translations    ProductTranslation[]
   stocks          Stock[]              
   orders          Order[]
+  coupons          Coupon[] 
   
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -194,6 +196,17 @@ model Coupon {
   
   expiryDate    DateTime?
   status        Boolean   @default(true)
+
+  // --- [PHẦN SỬA ĐỔI CHÍNH] ---
+  
+  // Nếu productId có giá trị, mã chỉ dùng được cho sản phẩm đó
+  productId     Int?
+  product       Product?  @relation(fields: [productId], references: [id])
+
+  // Nếu categoryId có giá trị, mã chỉ dùng được cho sản phẩm thuộc danh mục đó
+  categoryId    Int?
+  category      Category? @relation(fields: [categoryId], references: [id])
+  
   createdAt     DateTime  @default(now())
 }
 

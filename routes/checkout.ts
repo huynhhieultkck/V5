@@ -24,7 +24,7 @@ const buySchema = z.object({
 });
 
 /**
- * API Buy - Thực hiện mua hàng với cơ chế chống Race Condition
+ * API Buy - Thực hiện mua hàng với cơ chế chống Race Condition & Kiểm tra Coupon mục tiêu
  */
 checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async (c) => {
   const { productId, amount, couponCode } = c.req.valid("json");
@@ -35,7 +35,10 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
   try {
     const [user, product] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
-      prisma.product.findUnique({ where: { id: productId, status: true } }),
+      prisma.product.findUnique({ 
+        where: { id: productId, status: true },
+        include: { category: true } // Lấy category để kiểm tra coupon theo danh mục
+      }),
     ]);
 
     if (!user) return c.json({ message: t(c, "auth_not_found") }, 404);
@@ -66,6 +69,20 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
 
         if (!freshCoupon) throw new Error("COUPON_INVALID");
         
+        // --- BẮT ĐẦU KIỂM TRA RÀNG BUỘC COUPON MỚI ---
+
+        // 1. Kiểm tra theo Sản phẩm cụ thể
+        if (freshCoupon.productId && freshCoupon.productId !== product.id) {
+          throw new Error("COUPON_NOT_APPLICABLE");
+        }
+
+        // 2. Kiểm tra theo Danh mục cụ thể
+        if (freshCoupon.categoryId && freshCoupon.categoryId !== product.categoryId) {
+          throw new Error("COUPON_NOT_APPLICABLE");
+        }
+
+        // --- KẾT THÚC KIỂM TRA RÀNG BUỘC COUPON MỚI ---
+
         if (freshCoupon.expiryDate && new Date() > freshCoupon.expiryDate) {
           throw new Error("COUPON_INVALID");
         }
@@ -145,6 +162,7 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
     if (error.message === "COUPON_INVALID") return c.json({ message: t(c, "coupon_invalid") }, 400);
     if (error.message === "COUPON_USAGE_LIMIT") return c.json({ message: t(c, "coupon_usage_limit") }, 400);
     if (error.message === "COUPON_MIN_ORDER") return c.json({ message: t(c, "coupon_min_order") }, 400);
+    if (error.message === "COUPON_NOT_APPLICABLE") return c.json({ message: t(c, "coupon_not_applicable") }, 400);
     
     logger.error("[Checkout Error]:", error);
     return c.json({ message: t(c, "system_error") }, 500);
@@ -152,7 +170,7 @@ checkoutRoutes.post("/buy", authMiddleware, zValidator("json", buySchema), async
 });
 
 /**
- * API Lấy nội dung tài khoản (Đã sửa cho Admin có thể xem đơn của người khác)
+ * API Lấy nội dung tài khoản
  */
 checkoutRoutes.get("/content/:orderId", authMiddleware, async (c) => {
   const orderId = c.req.param("orderId");
@@ -163,7 +181,6 @@ checkoutRoutes.get("/content/:orderId", authMiddleware, async (c) => {
 
     if (!order) return c.json({ message: t(c, "order_not_found") }, 404);
 
-    // Kiểm tra quyền: Phải là chủ đơn hàng HOẶC là ADMIN
     if (order.userId !== payload.id && payload.role !== "ADMIN") {
       return c.json({ message: t(c, "order_forbidden") }, 403);
     }
@@ -187,7 +204,7 @@ checkoutRoutes.get("/content/:orderId", authMiddleware, async (c) => {
 });
 
 /**
- * API Polling Trạng thái (Đã sửa cho Admin có thể theo dõi đơn của người khác)
+ * API Polling Trạng thái
  */
 checkoutRoutes.get("/status/:orderId", authMiddleware, async (c) => {
   const orderId = c.req.param("orderId");
@@ -198,7 +215,6 @@ checkoutRoutes.get("/status/:orderId", authMiddleware, async (c) => {
 
     if (!order) return c.json({ message: t(c, "order_not_found") }, 404);
 
-    // Kiểm tra quyền: Chủ đơn hàng hoặc Admin
     if (order.userId !== payload.id && payload.role !== "ADMIN") {
       return c.json({ message: t(c, "order_forbidden") }, 403);
     }
@@ -207,7 +223,6 @@ checkoutRoutes.get("/status/:orderId", authMiddleware, async (c) => {
       status: "success",
       orderId: order.id,
       orderStatus: order.status,
-      // Thêm thông tin chi tiết cho Admin
       ...(payload.role === "ADMIN" && {
         userId: order.userId,
         totalPrice: order.totalPrice,
