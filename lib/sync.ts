@@ -1,10 +1,11 @@
 import { prisma } from "./prisma";
 import { CMSNTService } from "./cmsnt";
 import { ShopGmailService } from "./shopgmail";
+import { GmailNo1Service } from "./gmailno1"; // Import service mới
 import { logger } from "./logger";
 
 /**
- * Đồng bộ tồn kho từ các nguồn Resell Provider (Hỗ trợ CMSNT và SHOPGMAIL9999)
+ * Đồng bộ tồn kho từ các nguồn Resell Provider
  */
 export async function syncResellStock() {
   logger.log("[Sync] Bắt đầu đồng bộ kho hàng Resell...");
@@ -37,6 +38,10 @@ export async function syncResellStock() {
         } else if (provider.type === "SHOPGMAIL9999") {
           const shopGmail = new ShopGmailService(provider.domain, provider.apiKey);
           currentStock = await shopGmail.getStock(product.resellProductId);
+        } else if (provider.type === "GMAIL_NO1") {
+          // Xử lý loại nguồn Gmailno1
+          const gmailNo1 = new GmailNo1Service(provider.domain, provider.apiKey);
+          currentStock = await gmailNo1.getStock(product.resellProductId);
         }
 
         await prisma.product.update({

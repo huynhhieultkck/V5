@@ -1,20 +1,18 @@
 import { prisma } from "./lib/prisma";
 import { CMSNTService } from "./lib/cmsnt";
 import { ShopGmailService } from "./lib/shopgmail";
+import { GmailNo1Service } from "./lib/gmailno1"; // Import service mới
 import { mailService } from "./lib/mail";
 import { logger } from "./lib/logger";
 
 /**
- * Worker xử lý hàng đợi đơn hàng - Đã sửa lỗi Job Duplication & Đa nguồn Resell
+ * Worker xử lý hàng đợi đơn hàng
  */
 async function startWorker() {
-  logger.log("--- Order Worker is running with Strict Locking & Multi-Resell Support... ---");
+  logger.log("--- Order Worker is running with Multi-Resell Support... ---");
 
   while (true) {
     try {
-      /**
-       * 1. "Claim" Job sử dụng SELECT FOR UPDATE
-       */
       const job = await prisma.$transaction(async (tx) => {
         const pendingJobs = await tx.$queryRaw<any[]>`
           SELECT id, payload, attempts, maxAttempts FROM Job 
@@ -57,7 +55,6 @@ async function startWorker() {
 
         let deliveryData: string[] = [];
 
-        // 2. THỰC HIỆN LẤY HÀNG (FULFILLMENT)
         if (product.type === "LOCAL") {
           deliveryData = await prisma.$transaction(async (tx) => {
             const availableStocks = await tx.$queryRaw<any[]>`
@@ -83,7 +80,6 @@ async function startWorker() {
           });
 
         } else {
-          // Lấy từ nguồn cung cấp hàng đã cấu hình
           const provider = product.resellProvider;
           if (!provider) throw new Error("SẢN_PHẨM_CHƯA_CẤU_HÌNH_NHÀ_CUNG_CẤP");
 
@@ -101,12 +97,19 @@ async function startWorker() {
               throw new Error(res.message || "Lỗi API shop nguồn SHOPGMAIL9999");
             }
             deliveryData = res.data.accounts;
+          } else if (provider.type === "GMAIL_NO1") {
+            // Xử lý mua hàng từ nguồn Gmailno1
+            const gmailNo1 = new GmailNo1Service(provider.domain, provider.apiKey);
+            const res = await gmailNo1.buyProduct(product.resellProductId!, amount);
+            if (res.status !== "success" || !Array.isArray(res.data)) {
+              throw new Error(res.msg || "Lỗi API shop nguồn Gmailno1");
+            }
+            deliveryData = res.data;
           } else {
             throw new Error(`LOẠI_NHÀ_CUNG_CẤP_CHƯA_HỖ_TRỢ: ${provider.type}`);
           }
         }
 
-        // 3. LƯU VÀO ONEDRIVE
         const fileContent = deliveryData.join("\n");
         const fileName = `${orderId}.txt`;
         
@@ -116,7 +119,6 @@ async function startWorker() {
           folder: "/Orders"
         });
 
-        // 4. CẬP NHẬT ĐƠN HÀNG THÀNH CÔNG
         await prisma.order.update({
           where: { id: orderId },
           data: {
@@ -128,7 +130,6 @@ async function startWorker() {
           }
         });
 
-        // 5. CẬP NHẬT THỐNG KÊ DOANH SỐ
         await prisma.product.update({
           where: { id: productId },
           data: {
@@ -171,22 +172,12 @@ async function startWorker() {
 
 async function handleFailure(userId: string, orderId: string, amount: number, jobId: string, errorMsg: string) {
   logger.log(`[Worker] Đang hoàn tiền cho đơn hàng #${orderId} do lỗi: ${errorMsg}`);
-  
   try {
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) return;
-
-      await tx.user.update({
-        where: { id: userId },
-        data: { balance: { increment: amount } }
-      });
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "FAILURE", apiResponse: errorMsg }
-      });
-
+      await tx.user.update({ where: { id: userId }, data: { balance: { increment: amount } } });
+      await tx.order.update({ where: { id: orderId }, data: { status: "FAILURE", apiResponse: errorMsg } });
       await tx.transaction.create({
         data: {
           userId,
@@ -197,11 +188,7 @@ async function handleFailure(userId: string, orderId: string, amount: number, jo
           content: `Hoàn tiền đơn hàng #${orderId}: ${errorMsg}`
         }
       });
-
-      await tx.job.update({
-        where: { id: jobId },
-        data: { status: "FAILED", error: errorMsg }
-      });
+      await tx.job.update({ where: { id: jobId }, data: { status: "FAILED", error: errorMsg } });
     });
   } catch (e) {
     logger.error("[Worker] Lỗi nghiêm trọng khi thực hiện hoàn tiền:", e);

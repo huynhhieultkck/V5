@@ -7,8 +7,8 @@ import { authMiddleware, adminMiddleware } from "../middlewares/auth";
 
 const resellerRoutes = new Hono();
 
-// Thêm SHOPGMAIL9999 vào danh sách các loại nguồn hàng hỗ trợ
-const SUPPORTED_RESELL_TYPES = ["CMSNT", "SHOPGMAIL9999"];
+// Thêm GMAIL_NO1 vào danh sách các loại nguồn hàng hỗ trợ
+const SUPPORTED_RESELL_TYPES = ["CMSNT", "SHOPGMAIL9999", "GMAIL_NO1"];
 
 const resellerSchema = z.object({
   name: z.string().min(1),
