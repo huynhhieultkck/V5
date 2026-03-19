@@ -16,6 +16,9 @@ const updateSingleStockSchema = z.object({
   content: z.string().min(1),
 });
 
+/**
+ * ADMIN: Lấy danh sách tài khoản trong kho (có phân trang & tìm kiếm)
+ */
 stockRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
   const page = Math.max(Number(c.req.query("page") || 1), 1);
   const limit = Math.min(Math.max(Number(c.req.query("limit") || 50), 1), 500);
@@ -60,6 +63,9 @@ stockRoutes.get("/", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
+/**
+ * ADMIN: Thêm hàng vào kho
+ */
 stockRoutes.post("/import", authMiddleware, adminMiddleware, zValidator("json", importStockSchema), async (c) => {
   const { productId, content } = c.req.valid("json");
 
@@ -111,6 +117,9 @@ stockRoutes.put("/:id", authMiddleware, adminMiddleware, zValidator("json", upda
   }
 });
 
+/**
+ * ADMIN: Xóa 1 tài khoản khỏi kho
+ */
 stockRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   const id = parseInt(c.req.param("id"));
 
@@ -132,6 +141,9 @@ stockRoutes.delete("/:id", authMiddleware, adminMiddleware, async (c) => {
   }
 });
 
+/**
+ * ADMIN: Xóa sạch kho của một sản phẩm (Mặc định chỉ xóa hàng chưa bán)
+ */
 stockRoutes.delete("/product/:productId", authMiddleware, adminMiddleware, async (c) => {
   const productId = parseInt(c.req.param("productId"));
   const onlyUnsold = c.req.query("onlyUnsold") !== "false";
@@ -157,18 +169,21 @@ stockRoutes.delete("/product/:productId", authMiddleware, adminMiddleware, async
   }
 });
 
+/**
+ * ADMIN: Xuất file kho hàng (Chỉ xuất những sản phẩm CHƯA BÁN)
+ */
 stockRoutes.get("/export/:productId", authMiddleware, adminMiddleware, async (c) => {
   const productId = parseInt(c.req.param("productId"));
-  const isSoldStr = c.req.query("isSold");
 
   try {
-    const where: any = { productId };
-    if (isSoldStr === "true") where.isSold = true;
-    if (isSoldStr === "false") where.isSold = false;
-
+    // Chỉ lấy những tài khoản có isSold là false
     const items = await prisma.stock.findMany({
-      where,
-      select: { content: true }
+      where: { 
+        productId,
+        isSold: false 
+      },
+      select: { content: true },
+      orderBy: { createdAt: "asc" }
     });
 
     const fileContent = items.map(i => i.content).join("\n");
@@ -176,7 +191,7 @@ stockRoutes.get("/export/:productId", authMiddleware, adminMiddleware, async (c)
     return new Response(fileContent, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": `attachment; filename="product_${productId}_stock.txt"`
+        "Content-Disposition": `attachment; filename="product_${productId}_unsold_stock.txt"`
       }
     });
   } catch (error) {

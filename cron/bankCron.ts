@@ -11,12 +11,13 @@ const BANK_URLS: Record<string, string> = {
 
 const prefix = process.env.DEPOSIT_PREFIX || 'VMMO';
 const bankInterval = Number(process.env.CRON_BANK_INTERVAL) || 20000;
+
 /**
  * Cron Job tự động quét lịch sử giao dịch ngân hàng qua Web2M
- * Đã sửa lỗi: Xung đột mã giao dịch giữa các ngân hàng (Collision Bank TXID)
+ * Đã sửa lỗi: Xung đột mã giao dịch và hỗ trợ lọc mã ví không phụ thuộc khoảng trắng
  */
 export async function startBankCron() {
-  logger.log('--- Bank Cron Job started with Unique Prefixing... ---');
+  logger.log('--- Bank Cron Job started with Whitespace-Insensitive Matching... ---');
 
   while (true) {
     try {
@@ -38,7 +39,6 @@ export async function startBankCron() {
             /**
              * GIẢI PHÁP CHỐNG XUNG ĐỘT:
              * Tạo mã giao dịch duy nhất bằng cách kết hợp mã ngân hàng và mã giao dịch ngân hàng.
-             * Ví dụ: VCB_12345678, MB_12345678
              */
             const bankTxId = tx.transactionID;
             const uniqueCode = `${bank.code.toUpperCase()}_${bankTxId}`;
@@ -47,11 +47,19 @@ export async function startBankCron() {
             const exists = await prisma.transaction.findUnique({ where: { code: uniqueCode } });
             if (exists) continue;
 
-            // 3. Tìm mã ví (Wallet Code) trong nội dung chuyển khoản
-            // Tạo regex động: kết quả tương đương với /\b(VMMO[A-Z0-9]{8})/i
-            const regex = new RegExp(`\\b(${prefix}[A-Z0-9]{8})`, 'i');
+            /**
+             * GIẢI PHÁP XỬ LÝ KHOẢNG TRẮNG:
+             * Loại bỏ tất cả khoảng trắng trong nội dung chuyển khoản để so khớp chính xác hơn.
+             * Ví dụ: "VM MO ABC1 2345" -> "VMMOABC12345"
+             */
+            const cleanDescription = (tx.description || "").replace(/\s+/g, '');
 
-            const match = tx.description.match(regex); if (!match || !match[1]) continue;
+            // Tạo regex động dựa trên tiền tố cấu hình
+            // Ví dụ: kết quả tương đương với /(VMMO[A-Z0-9]{8})/i
+            const regex = new RegExp(`(${prefix}[A-Z0-9]{8})`, 'i');
+
+            const match = cleanDescription.match(regex);
+            if (!match || !match[1]) continue;
 
             const walletCode = match[1].toUpperCase();
             const amount = parseInt(tx.amount, 10);
@@ -68,7 +76,7 @@ export async function startBankCron() {
                 data: { balance: { increment: amount } }
               });
 
-              // Tạo bản ghi giao dịch với mã duy nhất đã có tiền tố
+              // Tạo bản ghi giao dịch
               await txPrisma.transaction.create({
                 data: {
                   userId: user.id,
@@ -92,7 +100,7 @@ export async function startBankCron() {
       logger.error('[BankCron] Lỗi vòng lặp chính:', err);
     }
 
-    // Chờ 20 giây trước khi quét lượt tiếp theo
+    // Chờ theo chu kỳ cấu hình (mặc định 20 giây)
     await new Promise(rs => setTimeout(rs, bankInterval));
   }
 }
